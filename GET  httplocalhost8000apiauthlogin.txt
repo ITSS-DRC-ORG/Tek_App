@@ -1,0 +1,831 @@
+GET : http://localhost:8000/api/auth/login
+=====================================
+{
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsInVzZXJfaWQiOjIsImRlcG90X2lkIjpudWxsLCJleHAiOjE3ODMwOTY4MzZ9.s4W8nJGGGipq16slbF-S4Z0xum8khiMPOYGdNT1-Is8",
+    "token_type": "bearer",
+    "user": {
+        "username": "admin",
+        "email": "admin@sgqg.com",
+        "nom": "Administrateur",
+        "prenom": "SGQG",
+        "role": "admin",
+        "depot_id": null,
+        "actif": true,
+        "id": 2,
+        "created_at": "2026-07-03T15:19:27",
+        "updated_at": "2026-07-03T15:19:27",
+        "depot_nom": null
+    }
+}
+
+POST : http://localhost:8000/api/auth/register
+=========================================
+{
+    "username": "vendeur3",
+    "email": "vendeur3@sgqg.com",
+    "nom": "Ngoa",
+    "prenom": "Jean",
+    "role": "vendeur",
+    "depot_id": 2,
+    "actif": true,
+    "id": 4,
+    "created_at": "2026-07-03T19:14:39",
+    "updated_at": "2026-07-03T19:14:39",
+    "depot_nom": null
+}
+
+GET : http://localhost:8000/api/auth/me
+==================================
+{
+    "username": "admin",
+    "email": "admin@sgqg.com",
+    "nom": "Administrateur",
+    "prenom": "SGQG",
+    "role": "admin",
+    "depot_id": null,
+    "actif": true,
+    "id": 2,
+    "created_at": "2026-07-03T15:19:27",
+    "updated_at": "2026-07-03T15:19:27",
+    "depot_nom": null
+}
+
+GET : http://localhost:8000/api/auth/users
+=====================================
+[
+    {
+        "username": "admin",
+        "email": "admin@sgqg.com",
+        "nom": "Administrateur",
+        "prenom": "SGQG",
+        "role": "admin",
+        "depot_id": null,
+        "actif": true,
+        "id": 2,
+        "created_at": "2026-07-03T15:19:27",
+        "updated_at": "2026-07-03T15:19:27",
+        "depot_nom": null
+    }
+]
+
+GET : http://localhost:8000/api/depots/
+=======================================
+[
+    {
+        "nom": "Grand Dépôt",
+        "type": "grand_depot",
+        "adresse": null,
+        "est_magasin": false,
+        "a_caisse": false,
+        "actif": true,
+        "id": 1,
+        "created_at": "2026-06-29T18:34:02",
+        "updated_at": "2026-06-29T18:34:02"
+    },
+    {
+        "nom": "Magasin",
+        "type": "petit_depot",
+        "adresse": null,
+        "est_magasin": true,
+        "a_caisse": true,
+        "actif": true,
+        "id": 2,
+        "created_at": "2026-06-29T18:34:02",
+        "updated_at": "2026-06-29T18:34:02"
+    },
+    {
+        "nom": "Troisième Dépôt",
+        "type": "troisieme_depot",
+        "adresse": null,
+        "est_magasin": false,
+        "a_caisse": false,
+        "actif": true,
+        "id": 3,
+        "created_at": "2026-06-29T18:34:02",
+        "updated_at": "2026-06-29T18:34:02"
+    }
+]
+
+GET : http://localhost:8000/api/depots/magasin
+===============================================
+{
+    "nom": "Magasin",
+    "type": "petit_depot",
+    "adresse": null,
+    "est_magasin": true,
+    "a_caisse": true,
+    "actif": true,
+    "id": 2,
+    "created_at": "2026-06-29T18:34:02",
+    "updated_at": "2026-06-29T18:34:02"
+}
+
+GET : http://localhost:8000/api/depots/grands-depots
+=====================================================
+[
+    {
+        "nom": "Grand Dépôt",
+        "type": "grand_depot",
+        "adresse": null,
+        "est_magasin": false,
+        "a_caisse": false,
+        "actif": true,
+        "id": 1,
+        "created_at": "2026-06-29T18:34:02",
+        "updated_at": "2026-06-29T18:34:02"
+    },
+    {
+        "nom": "Troisième Dépôt",
+        "type": "troisieme_depot",
+        "adresse": null,
+        "est_magasin": false,
+        "a_caisse": false,
+        "actif": true,
+        "id": 3,
+        "created_at": "2026-06-29T18:34:02",
+        "updated_at": "2026-06-29T18:34:02"
+    }
+]
+
+GET : http://localhost:8000/api/depots/1
+===================================
+{
+    "nom": "Grand Dépôt",
+    "type": "grand_depot",
+    "adresse": null,
+    "est_magasin": false,
+    "a_caisse": false,
+    "actif": true,
+    "id": 1,
+    "created_at": "2026-06-29T18:34:02",
+    "updated_at": "2026-06-29T18:34:02"
+}
+
+POST : http://localhost:8000/api/depots/
+=======================================
+{
+    "nom": "Dépôt Test",
+    "type": "petit_depot",
+    "adresse": "Douala, Cameroun",
+    "est_magasin": false,
+    "a_caisse": false,
+    "actif": true,
+    "id": 4,
+    "created_at": "2026-07-03T19:23:49",
+    "updated_at": "2026-07-03T19:23:49"
+}
+
+GET : http://localhost:8000/api/produits/
+==========================================
+{
+    "detail": [
+        {
+            "type": "missing",
+            "loc": [
+                "body",
+                "code"
+            ],
+            "msg": "Field required",
+            "input": {
+                "nom": "Menuiserie",
+                "description": "Produits de menuiserie"
+            }
+        },
+        {
+            "type": "missing",
+            "loc": [
+                "body",
+                "prix_achat"
+            ],
+            "msg": "Field required",
+            "input": {
+                "nom": "Menuiserie",
+                "description": "Produits de menuiserie"
+            }
+        },
+        {
+            "type": "missing",
+            "loc": [
+                "body",
+                "prix_vente"
+            ],
+            "msg": "Field required",
+            "input": {
+                "nom": "Menuiserie",
+                "description": "Produits de menuiserie"
+            }
+        }
+    ]
+}
+
+GET : http://localhost:8000/api/produits/?search=ciment&categorie_id=1&actif=true
+=================================================================================
+[
+    {
+        "code": "CIM001",
+        "nom": "Ciment 50kg",
+        "description": null,
+        "categorie_id": 1,
+        "prix_achat": "4500.00",
+        "prix_vente": "5500.00",
+        "unite": "sac",
+        "seuil_alerte": 10,
+        "actif": true,
+        "id": 9,
+        "created_at": "2026-07-03T13:56:24",
+        "updated_at": "2026-07-03T13:56:24",
+        "categorie_nom": null
+    }
+]
+
+GET : http://localhost:8000/api/produits/1
+===========================================
+{
+    "code": "CLOU-001",
+    "nom": "Clou galvanisé 50mm",
+    "description": "Clou galvanisé de 50mm pour travaux généraux",
+    "categorie_id": 1,
+    "prix_achat": "2.50",
+    "prix_vente": "3.75",
+    "unite": "kg",
+    "seuil_alerte": 10,
+    "actif": true,
+    "id": 1,
+    "created_at": "2026-06-29T18:34:10",
+    "updated_at": "2026-06-29T18:34:10",
+    "categorie_nom": null
+}
+
+POST : http://localhost:8000/api/produits/
+=============================================
+{
+    "code": "VIS003",
+    "nom": "Vis à bois 6x60",
+    "description": "Vis à bois pour menuiserie",
+    "categorie_id": 1,
+    "prix_achat": "300.00",
+    "prix_vente": "450.00",
+    "unite": "pièce",
+    "seuil_alerte": 25,
+    "actif": true,
+    "id": 17,
+    "created_at": "2026-07-06T12:15:38",
+    "updated_at": "2026-07-06T12:15:38",
+    "categorie_nom": null
+}
+
+GET : http://localhost:8000/api/clients/
+========================================
+[
+    {
+        "nom": "Client Test",
+        "telephone": "671234567",
+        "email": "client@test.com",
+        "adresse": "Yaoundé, Cameroun",
+        "type_client": "particulier",
+        "actif": true,
+        "id": 1,
+        "created_at": "2026-06-29T18:34:10",
+        "updated_at": "2026-06-29T18:34:10"
+    },
+    {
+        "nom": "Jean Dupont",
+        "telephone": "697123456",
+        "email": "jean.dupont@email.com",
+        "adresse": null,
+        "type_client": "particulier",
+        "actif": true,
+        "id": 2,
+        "created_at": "2026-07-03T13:56:24",
+        "updated_at": "2026-07-03T13:56:24"
+    }
+]
+
+GET : http://localhost:8000/api/clients/?search=dupont&type_client=particulier&actif=true
+=========================================================================================
+[
+    {
+        "nom": "Jean Dupont",
+        "telephone": "697123456",
+        "email": "jean.dupont@email.com",
+        "adresse": null,
+        "type_client": "particulier",
+        "actif": true,
+        "id": 2,
+        "created_at": "2026-07-03T13:56:24",
+        "updated_at": "2026-07-03T13:56:24"
+    }
+]
+
+GET : http://localhost:8000/api/clients/1
+==========================================
+{
+    "nom": "Client Test",
+    "telephone": "671234567",
+    "email": "client@test.com",
+    "adresse": "Yaoundé, Cameroun",
+    "type_client": "particulier",
+    "actif": true,
+    "id": 1,
+    "created_at": "2026-06-29T18:34:10",
+    "updated_at": "2026-06-29T18:34:10"
+}
+
+POST : http://localhost:8000/api/clients/
+=========================================
+{
+    "nom": "Jean Pierre",
+    "telephone": "697890123",
+    "email": "jp@email.com",
+    "adresse": "Douala, Cameroun",
+    "type_client": "particulier",
+    "actif": true,
+    "id": 8,
+    "created_at": "2026-07-06T12:21:27",
+    "updated_at": "2026-07-06T12:21:27"
+}
+
+GET : http://localhost:8000/api/fournisseurs
+=============================================
+[
+    {
+        "nom": "Fournisseur Test SARL",
+        "contact": "M. Dupont",
+        "telephone": "699876543",
+        "email": "fournisseur@test.com",
+        "adresse": "Douala, Cameroun",
+        "actif": true,
+        "id": 1,
+        "created_at": "2026-06-29T18:34:10",
+        "updated_at": "2026-06-29T18:34:10"
+    },
+    {
+        "nom": "Cimenterie SA",
+        "contact": "Paul Ngoumou",
+        "telephone": "698123456",
+        "email": "paul@cimenterie.com",
+        "adresse": null,
+        "actif": true,
+        "id": 2,
+        "created_at": "2026-07-03T13:56:24",
+        "updated_at": "2026-07-03T13:56:24"
+    }
+]
+
+GET : http://localhost:8000/api/fournisseurs/1
+==============================================
+{
+    "nom": "Fournisseur Test SARL",
+    "contact": "M. Dupont",
+    "telephone": "699876543",
+    "email": "fournisseur@test.com",
+    "adresse": "Douala, Cameroun",
+    "actif": true,
+    "id": 1,
+    "created_at": "2026-06-29T18:34:10",
+    "updated_at": "2026-06-29T18:34:10"
+}
+
+POST : http://localhost:8000/api/fournisseurs/
+==============================================
+{
+    "nom": "Bois et Métaux SARL",
+    "contact": "M. Mbarga",
+    "telephone": "698567890",
+    "email": "contact@boismetaux.com",
+    "adresse": null,
+    "actif": true,
+    "id": 7,
+    "created_at": "2026-07-06T12:29:56",
+    "updated_at": "2026-07-06T12:29:56"
+}
+
+POST : http://localhost:8000/api/ventes
+========================================
+{
+    "client_id": 1,
+    "depot_source_id": 2,
+    "date_vente": "2026-07-03",
+    "remise": "0.0",
+    "mode_livraison": "retrait_magasin",
+    "notes": null,
+    "id": 8,
+    "numero_facture": "FACTURE-2-20260706-1236-870404",
+    "total_ht": "23600.0",
+    "total_ttc": "27848.0",
+    "statut": "en_cours",
+    "date_paiement": null,
+    "date_livraison": null,
+    "created_by": 2,
+    "created_at": "2026-07-06T12:36:55",
+    "updated_at": "2026-07-06T12:36:55",
+    "client_nom": "Client Test",
+    "depot_source_nom": "Magasin",
+    "lignes": [
+        {
+            "id": 16,
+            "produit_id": 1,
+            "quantite": 2,
+            "prix_unitaire": 5500.0,
+            "total_ligne": 11000.0,
+            "produit_nom": "Clou galvanisé 50mm",
+            "produit_code": "CLOU-001"
+        },
+        {
+            "id": 17,
+            "produit_id": 2,
+            "quantite": 3,
+            "prix_unitaire": 4200.0,
+            "total_ligne": 12600.0,
+            "produit_nom": "Vis à bois 4x30",
+            "produit_code": "VIS-001"
+        }
+    ]
+}
+
+
+POST : http://localhost:8000/api/ventes/7/paiement
+====================================================
+{
+    "client_id": 1,
+    "depot_source_id": 2,
+    "date_vente": "2026-07-03",
+    "remise": "0.0",
+    "mode_livraison": "retrait_magasin",
+    "notes": null,
+    "id": 8,
+    "numero_facture": "FACTURE-2-20260706-1236-870404",
+    "total_ht": "23600.0",
+    "total_ttc": "27848.0",
+    "statut": "payee",
+    "date_paiement": "2026-07-06",
+    "date_livraison": null,
+    "created_by": 2,
+    "created_at": "2026-07-06T12:36:55",
+    "updated_at": "2026-07-06T12:39:54",
+    "client_nom": "Client Test",
+    "depot_source_nom": "Magasin",
+    "lignes": [
+        {
+            "id": 16,
+            "produit_id": 1,
+            "quantite": 2,
+            "prix_unitaire": 5500.0,
+            "total_ligne": 11000.0,
+            "produit_nom": "Clou galvanisé 50mm",
+            "produit_code": "CLOU-001"
+        },
+        {
+            "id": 17,
+            "produit_id": 2,
+            "quantite": 3,
+            "prix_unitaire": 4200.0,
+            "total_ligne": 12600.0,
+            "produit_nom": "Vis à bois 4x30",
+            "produit_code": "VIS-001"
+        }
+    ]
+}
+
+POST : http://localhost:8000/api/ventes/7/livrer
+==================================================
+{}
+
+APRES POST
+
+{
+    "client_id": 3,
+    "depot_source_id": 2,
+    "date_vente": "2026-07-03",
+    "remise": "0.0",
+    "mode_livraison": "retrait_magasin",
+    "notes": null,
+    "id": 7,
+    "numero_facture": "FACTURE-2-20260703-1807-440786",
+    "total_ht": "35800.0",
+    "total_ttc": "42244.0",
+    "statut": "livree",
+    "date_paiement": "2026-07-03",
+    "date_livraison": "2026-07-06",
+    "created_by": 2,
+    "created_at": "2026-07-03T18:07:37",
+    "updated_at": "2026-07-06T12:41:20",
+    "client_nom": "BTP Construction",
+    "depot_source_nom": "Magasin",
+    "lignes": [
+        {
+            "id": 13,
+            "produit_id": 5,
+            "quantite": 2,
+            "prix_unitaire": 10500.0,
+            "total_ligne": 21000.0,
+            "produit_nom": "Marteau 500g",
+            "produit_code": "MARTEAU-001"
+        },
+        {
+            "id": 14,
+            "produit_id": 6,
+            "quantite": 4,
+            "prix_unitaire": 2200.0,
+            "total_ligne": 8800.0,
+            "produit_nom": "Peinture blanche 5L",
+            "produit_code": "PEINTURE-001"
+        },
+        {
+            "id": 15,
+            "produit_id": 7,
+            "quantite": 5,
+            "prix_unitaire": 1200.0,
+            "total_ligne": 6000.0,
+            "produit_nom": "Scie circulaire 185mm",
+            "produit_code": "SCIE-001"
+        }
+    ]
+}
+
+POST : http://localhost:8000/api/ventes/7/annuler
+==================================================
+{}
+APRES POST
+
+{
+    "success": false,
+    "error": "Une vente livrée ne peut pas être annulée",
+    "timestamp": "2026-07-06T12:48:04.480580"
+}
+
+GET : http://localhost:8000/api/ventes/stats/journalieres
+=========================================================
+{
+    "date": "2026-07-06",
+    "total_ventes": 0,
+    "total_ca": 0.0,
+    "ventes_par_statut": {
+        "en_cours": 0,
+        "payees": 0,
+        "livrees": 0,
+        "annulees": 0
+    },
+    "ventes_par_depot": {}
+}
+
+GET : http://localhost:8000/api/factures/stats/par-mois?annee=2026
+==================================================================
+[
+    {
+        "mois": 7,
+        "nombre_factures": 4,
+        "total_ca": 123192.0
+    }
+]
+
+GET : http://localhost:8000/api/stocks/
+=======================================
+
+[
+    {
+        "produit_id": 1,
+        "depot_id": 3,
+        "quantite": 50,
+        "quantite_minimale": 10,
+        "quantite_maximale": 500,
+        "id": 1,
+        "created_at": "2026-06-29T18:34:10",
+        "updated_at": "2026-06-29T18:34:10",
+        "produit_nom": null,
+        "produit_code": null,
+        "depot_nom": null,
+        "en_alerte": false
+    },
+    {
+        "produit_id": 1,
+        "depot_id": 2,
+        "quantite": 50,
+        "quantite_minimale": 10,
+        "quantite_maximale": 500,
+        "id": 2,
+        "created_at": "2026-06-29T18:34:10",
+        "updated_at": "2026-07-06T12:36:55",
+        "produit_nom": null,
+        "produit_code": null,
+        "depot_nom": null,
+        "en_alerte": false
+    }
+]
+
+GET : http://localhost:8000/api/stocks/?depot_id=1&en_alerte=true
+=================================================================
+[
+    {
+        "produit_id": 3,
+        "depot_id": 1,
+        "quantite": 18,
+        "quantite_minimale": 20,
+        "quantite_maximale": 500,
+        "id": 9,
+        "created_at": "2026-06-29T18:34:10",
+        "updated_at": "2026-07-06T13:10:45",
+        "produit_nom": null,
+        "produit_code": null,
+        "depot_nom": null,
+        "en_alerte": false
+    }
+]
+
+GET : http://localhost:8000/api/stocks/depot/1
+===============================================
+[
+    {
+        "produit_id": 1,
+        "depot_id": 1,
+        "quantite": 190,
+        "quantite_minimale": 10,
+        "quantite_maximale": 500,
+        "id": 3,
+        "created_at": "2026-06-29T18:34:10",
+        "updated_at": "2026-07-03T18:54:56",
+        "produit_nom": null,
+        "produit_code": null,
+        "depot_nom": null,
+        "en_alerte": false
+    },
+    {
+        "produit_id": 2,
+        "depot_id": 1,
+        "quantite": 125,
+        "quantite_minimale": 15,
+        "quantite_maximale": 500,
+        "id": 6,
+        "created_at": "2026-06-29T18:34:10",
+        "updated_at": "2026-07-03T18:54:56",
+        "produit_nom": null,
+        "produit_code": null,
+        "depot_nom": null,
+        "en_alerte": false
+    }
+]
+
+GET : http://localhost:8000/api/stocks/produit/1/depot/1
+========================================================
+
+{
+    "produit_id": 1,
+    "depot_id": 1,
+    "quantite": 190,
+    "quantite_minimale": 10,
+    "quantite_maximale": 500,
+    "id": 3,
+    "created_at": "2026-06-29T18:34:10",
+    "updated_at": "2026-07-03T18:54:56",
+    "produit_nom": null,
+    "produit_code": null,
+    "depot_nom": null,
+    "en_alerte": false
+}
+
+POST : http://localhost:8000/api/stocks/ajuster
+===============================================
+{
+    "produit_id": 1,
+    "depot_id": 1,
+    "quantite": 150,
+    "quantite_minimale": 10,
+    "quantite_maximale": 500,
+    "id": 3,
+    "created_at": "2026-06-29T18:34:10",
+    "updated_at": "2026-07-06T13:18:37",
+    "produit_nom": null,
+    "produit_code": null,
+    "depot_nom": null,
+    "en_alerte": false
+}
+
+GET : http://localhost:8000/api/stocks/historique/1/1?limit=20
+===============================================================
+[
+    {
+        "id": 30,
+        "produit_id": 1,
+        "depot_id": 1,
+        "ancienne_quantite": 190,
+        "nouvelle_quantite": 150,
+        "type_mouvement": "ajustement",
+        "reference_id": null,
+        "reference_type": "ajustement_manuel",
+        "date_mouvement": "2026-07-06T13:18:37",
+        "created_by": 2
+    },
+    {
+        "id": 26,
+        "produit_id": 1,
+        "depot_id": 1,
+        "ancienne_quantite": 140,
+        "nouvelle_quantite": 190,
+        "type_mouvement": "entree",
+        "reference_id": 3,
+        "reference_type": "achat",
+        "date_mouvement": "2026-07-03T18:54:56",
+        "created_by": 2
+    }
+]
+
+POST : http://localhost:8000/api/transferts/
+============================================
+
+{
+    "depot_source_id": 1,
+    "depot_destination_id": 2,
+    "date_transfert": "2026-07-03",
+    "motif": "Réapprovisionnement du magasin",
+    "id": 4,
+    "numero_bon": "TRANSFERT-1-20260706-1326-736763",
+    "statut": "en_attente",
+    "date_validation": null,
+    "date_effectue": null,
+    "valide_par": null,
+    "created_by": 2,
+    "created_at": "2026-07-06T13:26:15",
+    "updated_at": "2026-07-06T13:26:15",
+    "depot_source_nom": "Grand Dépôt",
+    "depot_destination_nom": "Magasin",
+    "lignes": [
+        {
+            "id": 10,
+            "produit_id": 1,
+            "quantite": 10,
+            "produit_nom": "Clou galvanisé 50mm",
+            "produit_code": "CLOU-001"
+        },
+        {
+            "id": 11,
+            "produit_id": 2,
+            "quantite": 15,
+            "produit_nom": "Vis à bois 4x30",
+            "produit_code": "VIS-001"
+        }
+    ]
+}
+
+POST : http://localhost:8000/api/transferts/1/valider
+=====================================================
+{} APRES POST 
+
+{
+    "depot_source_id": 1,
+    "depot_destination_id": 2,
+    "date_transfert": "2026-07-03",
+    "motif": "Réapprovisionnement du magasin",
+    "id": 1,
+    "numero_bon": "TRANSFERT-1-20260703-1828-489664",
+    "statut": "valide",
+    "date_validation": "2026-07-06",
+    "date_effectue": null,
+    "valide_par": 2,
+    "created_by": 2,
+    "created_at": "2026-07-03T18:28:14",
+    "updated_at": "2026-07-06T13:28:05",
+    "depot_source_nom": "Grand Dépôt",
+    "depot_destination_nom": "Magasin",
+    "lignes": [
+        {
+            "id": 1,
+            "produit_id": 1,
+            "quantite": 10,
+            "produit_nom": "Clou galvanisé 50mm",
+            "produit_code": "CLOU-001"
+        },
+        {
+            "id": 2,
+            "produit_id": 2,
+            "quantite": 15,
+            "produit_nom": "Vis à bois 4x30",
+            "produit_code": "VIS-001"
+        },
+        {
+            "id": 3,
+            "produit_id": 3,
+            "quantite": 20,
+            "produit_nom": "Câble électrique 2.5mm²",
+            "produit_code": "CABLE-001"
+        }
+    ]
+}
+
+POST : http://localhost:8000/api/transferts/1/annuler
+=======================================================
+{} APRES POST
+{
+    "success": false,
+    "error": "Seul un transfert en attente peut être annulé",
+    "timestamp": "2026-07-06T13:44:39.985648"
+}
+
+
+
+
+
+
+
+
+
+

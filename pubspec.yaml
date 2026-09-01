@@ -1,0 +1,55 @@
+name: tek_app
+description: "Logiciel de gestion de quincaillerie TEK'app"
+
+# Empêche la publication accidentelle sur pub.dev
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Icônes par défaut
+  cupertino_icons: ^1.0.8
+
+  # --- AJOUTS POUR TEK'APP ---
+  
+  # Pour appeler tes endpoints API MySQL
+  http: ^1.1.0
+
+  # Pour gérer l'état de l'application (authentification, panier, etc.)
+  provider: ^6.1.1
+
+  # Pour formater les prix (FCFA/Euro) et les dates
+  intl: ^0.19.0
+
+  # Pour gérer la taille et la position de la fenêtre sur Windows/Desktop
+  window_manager: ^0.3.7
+
+  # (Optionnel) Pour un design plus moderne
+  google_fonts: ^6.2.1
+  shared_preferences: ^2.5.5
+  dio: ^5.10.0
+  pdf: ^3.10.0
+  printing: ^5.11.0
+  path_provider: ^2.0.0  
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Lints pour garder un code propre
+  flutter_lints: ^3.0.0
+
+flutter:
+  # Utilisation du Material Design 3
+  uses-material-design: true
+
+  # Section assets (à décommenter si tu as un logo)
+  assets:
+    - assets/fonts/Roboto-Regular.ttf
