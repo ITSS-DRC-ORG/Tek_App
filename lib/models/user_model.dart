@@ -1,10 +1,9 @@
 /// Énumération des rôles utilisateur
 enum UserRole {
   admin,
-  vendeur,
   caissier,
-  magasinier,
-  gestionnaire_depot,
+  gestionnaire,
+  vendeur,
 }
 
 /// Extension pour les rôles utilisateur
@@ -14,14 +13,12 @@ extension UserRoleExtension on UserRole {
     switch (this) {
       case UserRole.admin:
         return 'Administrateur';
-      case UserRole.vendeur:
-        return 'Vendeur';
       case UserRole.caissier:
         return 'Caissier';
-      case UserRole.magasinier:
-        return 'Magasinier';
-      case UserRole.gestionnaire_depot:
-        return 'Gestionnaire de dépôt';
+      case UserRole.gestionnaire:
+        return 'Gestionnaire';
+      case UserRole.vendeur:
+        return 'Vendeur';
     }
   }
 
@@ -30,14 +27,12 @@ extension UserRoleExtension on UserRole {
     switch (this) {
       case UserRole.admin:
         return 0xFFE53935; // Rouge
-      case UserRole.vendeur:
-        return 0xFF1E88E5; // Bleu
       case UserRole.caissier:
         return 0xFF43A047; // Vert
-      case UserRole.magasinier:
-        return 0xFFFB8C00; // Orange
-      case UserRole.gestionnaire_depot:
+      case UserRole.gestionnaire:
         return 0xFF8E24AA; // Violet
+      case UserRole.vendeur:
+        return 0xFF1E88E5; // Bleu
     }
   }
 
@@ -46,14 +41,32 @@ extension UserRoleExtension on UserRole {
     switch (this) {
       case UserRole.admin:
         return 'admin';
-      case UserRole.vendeur:
-        return 'vendeur';
       case UserRole.caissier:
         return 'caissier';
-      case UserRole.magasinier:
-        return 'magasinier';
-      case UserRole.gestionnaire_depot:
-        return 'gestionnaire_depot';
+      case UserRole.gestionnaire:
+        return 'gestionnaire';
+      case UserRole.vendeur:
+        return 'vendeur';
+    }
+  }
+
+  /// Parse un rôle depuis une chaîne
+  static UserRole parse(String role) {
+    final r = role.toLowerCase().trim();
+    switch (r) {
+      case 'admin':
+        return UserRole.admin;
+      case 'caissier':
+        return UserRole.caissier;
+      case 'gestionnaire':
+      // Compatibilité avec l'ancienne API
+      case 'magasinier':
+      case 'gestionnaire_depot':
+        return UserRole.gestionnaire;
+      case 'vendeur':
+        return UserRole.vendeur;
+      default:
+        return UserRole.vendeur;
     }
   }
 }
@@ -90,46 +103,30 @@ class UserModel {
 
   /// Crée une instance de UserModel à partir d'un JSON
   factory UserModel.fromJson(Map<String, dynamic> json, [String? token]) {
-    // Si le JSON contient un champ 'user', on l'extrait
-    final data = json.containsKey('user') ? json['user'] : json;
+    final data = json.containsKey('user')
+        ? (json['user'] as Map<String, dynamic>)
+        : json;
+
     final tokenValue = token ?? json['access_token'] as String? ?? '';
 
     return UserModel(
-      id: data['id'] as int,
-      username: data['username'] as String,
-      email: data['email'] as String,
-      nom: data['nom'] as String,
+      id: data['id'] as int? ?? 0,
+      username: data['username'] as String? ?? '',
+      email: data['email'] as String? ?? '',
+      nom: data['nom'] as String? ?? '',
       prenom: data['prenom'] as String? ?? '',
-      role: _parseRole(data['role'] as String? ?? 'vendeur'),
+      role: UserRoleExtension.parse(data['role'] as String? ?? 'vendeur'),
       depotId: data['depot_id'] as int?,
       depotNom: data['depot_nom'] as String?,
       actif: data['actif'] as bool? ?? true,
       token: tokenValue,
-      createdAt: data['created_at'] != null 
-          ? DateTime.parse(data['created_at'] as String) 
+      createdAt: data['created_at'] != null
+          ? DateTime.tryParse(data['created_at'] as String) ?? DateTime.now()
           : DateTime.now(),
-      updatedAt: data['updated_at'] != null 
-          ? DateTime.parse(data['updated_at'] as String) 
+      updatedAt: data['updated_at'] != null
+          ? DateTime.tryParse(data['updated_at'] as String) ?? DateTime.now()
           : DateTime.now(),
     );
-  }
-
-  /// Parse le rôle depuis une chaîne
-  static UserRole _parseRole(String role) {
-    switch (role.toLowerCase()) {
-      case 'admin':
-        return UserRole.admin;
-      case 'vendeur':
-        return UserRole.vendeur;
-      case 'caissier':
-        return UserRole.caissier;
-      case 'magasinier':
-        return UserRole.magasinier;
-      case 'gestionnaire_depot':
-        return UserRole.gestionnaire_depot;
-      default:
-        return UserRole.vendeur;
-    }
   }
 
   /// Convertit une instance de UserModel en JSON
@@ -180,50 +177,44 @@ class UserModel {
     );
   }
 
-  /// Retourne le nom complet de l'utilisateur
+  /// Nom complet
   String get fullName => '$prenom $nom'.trim();
 
-  /// Retourne les initiales de l'utilisateur
+  /// Initiales
   String get initials {
     final first = prenom.isNotEmpty ? prenom[0] : '';
     final last = nom.isNotEmpty ? nom[0] : '';
     return '$first$last'.toUpperCase();
   }
 
-  /// Vérifie si l'utilisateur est un administrateur
   bool get isAdmin => role == UserRole.admin;
-
-  /// Vérifie si l'utilisateur est un vendeur
-  bool get isVendeur => role == UserRole.vendeur;
-
-  /// Vérifie si l'utilisateur est un caissier
   bool get isCaissier => role == UserRole.caissier;
-
-  /// Vérifie si l'utilisateur est un magasinier
-  bool get isMagasinier => role == UserRole.magasinier;
-
-  /// Vérifie si l'utilisateur est un gestionnaire de dépôt
-  bool get isGestionnaireDepot => role == UserRole.gestionnaire_depot;
+  bool get isGestionnaire => role == UserRole.gestionnaire;
+  bool get isVendeur => role == UserRole.vendeur;
 
   /// Vérifie si l'utilisateur a accès à une section
   bool canAccess(String section) {
     switch (role) {
       case UserRole.admin:
-        return true; // Admin a accès à tout
-      case UserRole.vendeur:
-        return section == 'ventes' || section == 'clients';
+        return true;
       case UserRole.caissier:
-        return section == 'ventes' || section == 'caisse' || section == 'clients';
-      case UserRole.magasinier:
-        return section == 'stocks' || section == 'produits' || section == 'transferts';
-      case UserRole.gestionnaire_depot:
-        return section == 'stocks' || section == 'produits' || 
-               section == 'transferts' || section == 'achats';
+        return ['ventes', 'caisse', 'clients'].contains(section);
+      case UserRole.gestionnaire:
+        return [
+          'stocks',
+          'produits',
+          'transferts',
+          'achats',
+          'ravitaillement'
+        ].contains(section);
+      case UserRole.vendeur:
+        return ['ventes', 'clients'].contains(section);
     }
   }
 
   @override
-  String toString() => 'UserModel(id: $id, username: $username, role: ${role.label})';
+  String toString() =>
+      'UserModel(id: $id, username: $username, role: ${role.label})';
 
   @override
   bool operator ==(Object other) {

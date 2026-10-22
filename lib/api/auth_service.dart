@@ -4,19 +4,24 @@ import '../utils/config.dart';
 class AuthService {
   final Dio _dio = Dio();
 
-  AuthService() {
+  AuthService({String? token}) {
     _dio.options.baseUrl = AppConfig.baseUrl;
     _dio.options.headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
+    _dio.options.connectTimeout = const Duration(seconds: 15);
+    _dio.options.receiveTimeout = const Duration(seconds: 15);
   }
 
-  Future<Map<String, dynamic>?> login(String username, String password) async {
+  /// Connecte l'utilisateur et retourne la réponse (token + user)
+  /// ou un Map contenant `error` en cas d'échec.
+  Future<Map<String, dynamic>?> login(
+      String username,
+      String password,
+      ) async {
     try {
-      print('🔐 Connexion avec Dio pour: $username');
-
-      // ✅ Utiliser FormData pour forcer l'envoi
       final formData = FormData.fromMap({
         'username': username,
         'password': password,
@@ -26,27 +31,52 @@ class AuthService {
         '/auth/login',
         data: formData,
         options: Options(
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          // ✅ Forcer la validation même pour 422
-          validateStatus: (status) => true,
+          contentType: Headers.formUrlEncodedContentType,
+          validateStatus: (status) => status != null && status < 500,
         ),
       );
 
-      print('📡 Status: ${response.statusCode}');
-      print('📡 Data: ${response.data}');
-
-      if (response.statusCode == 200) {
-        return response.data as Map<String, dynamic>;
-      } else {
-        print('❌ Status Code: ${response.statusCode}');
-        print('❌ Response: ${response.data}');
-        return null;
+      if (response.statusCode == 200 && response.data is Map) {
+        return Map<String, dynamic>.from(response.data as Map);
       }
+
+      // ✅ Retourner un message d'erreur explicite
+      String message = 'Identifiants incorrects';
+      final data = response.data;
+      if (data is Map) {
+        message = (data['error'] ?? data['detail'] ?? message).toString();
+      }
+      return {'error': message, 'status': response.statusCode};
+    } on DioException catch (e) {
+      // ✅ Erreurs réseau : timeout, connexion refusée, etc.
+      String message;
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        message = 'Le serveur ne répond pas. Vérifiez votre connexion.';
+      } else if (e.type == DioExceptionType.connectionError) {
+        message = 'Impossible de joindre le serveur. Vérifiez que l\'API est démarrée.';
+      } else {
+        message = e.message ?? 'Erreur de connexion inconnue';
+      }
+      return {'error': message, 'type': e.type.toString()};
     } catch (e) {
-      print('❌ Dio Exception: $e');
-      return null;
+      return {'error': 'Erreur inattendue: ${e.toString()}'};
+    }
+  }
+
+  /// Vérifie que l'API est joignable (health check)
+  Future<bool> checkHealth() async {
+    try {
+      final response = await _dio.get(
+        '/health',
+        options: Options(
+          validateStatus: (status) => status != null && status < 500,
+        ),
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
     }
   }
 }

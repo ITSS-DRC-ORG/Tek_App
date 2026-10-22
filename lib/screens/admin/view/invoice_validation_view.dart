@@ -1,52 +1,10 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tek_app/api/admin_service.dart';
 import 'package:tek_app/providers/auth_provider.dart';
 import 'package:tek_app/screens/cashier/cashier_sales.dart';
-
-/// ---------------------------------------------------------------------------
-/// TOKENS DE DESIGN — palette officielle de l'application
-/// ---------------------------------------------------------------------------
-class K {
-  static const bg = Color(0xFFF5F7FA);
-  static const surface = Color(0xFFFFFFFF);
-  static const surfaceAlt = Color(0xFFECEFF1);
-  static const border = Color(0xFFCFD8DC);
-  static const primary = Color(0xFF455A64);
-  static const accent = Color(0xFF455A64);
-  static const accentSoft = Color(0x1A455A64);
-  static const textPrimary = Color(0xFF263238);
-  static const textMuted = Color(0xFF78909C);
-  static const success = Color(0xFF43A047);
-  static const danger = Color(0xFFE53935);
-  static const info = Color(0xFF1E88E5);
-  static const warning = Color(0xFFFB8C00);
-
-  static const sidebarGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0xFF37474F), Color(0xFF546E7A)],
-  );
-
-  static const Duration anim = Duration(milliseconds: 280);
-  static const double radius = 16.0;
-  static const double radiusSm = 10.0;  // <-- AJOUTÉ
-  static const double radiusXs = 6.0;
-  static const double radiusXl = 20.0;
-
-  static BoxShadow get cardShadow => BoxShadow(
-        color: Colors.black.withOpacity(0.055),
-        blurRadius: 18,
-        spreadRadius: 0,
-        offset: const Offset(0, 4),
-      );
-
-  static BoxShadow get subtleShadow => BoxShadow(
-        color: Colors.black.withOpacity(0.03),
-        blurRadius: 8,
-        offset: const Offset(0, 2),
-      );
-}
+import 'package:tek_app/theme/app_theme.dart';
 
 class InvoiceValidationView extends StatefulWidget {
   const InvoiceValidationView({super.key});
@@ -74,14 +32,24 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
         final service = AdminService(user.token);
         final sales = await service.getSales(statut: 'en_cours');
         setState(() {
-          _pendingInvoices = sales.map((s) => s as Map<String, dynamic>).toList();
+          _pendingInvoices =
+              sales.map((s) => s as Map<String, dynamic>).toList();
           _isLoading = false;
         });
+      } else {
+        setState(() => _isLoading = false);
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      _showSnackBar('Erreur: ${e.toString()}', Colors.red);
+      _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
     }
+  }
+
+  double get _cumulativeTotal {
+    return _pendingInvoices.fold<double>(0.0, (sum, inv) {
+      final t = double.tryParse(inv['total_ttc']?.toString() ?? '0') ?? 0;
+      return sum + t;
+    });
   }
 
   void _showSnackBar(String message, Color color) {
@@ -90,17 +58,28 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
         content: Row(
           children: [
             Icon(
-              color == Colors.green ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+              color == const Color(0xFF107C41)
+                  ? Icons.check_circle_rounded
+                  : Icons.error_outline_rounded,
               color: Colors.white,
-              size: 20,
+              size: 18,
             ),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
           ],
         ),
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         duration: const Duration(seconds: 3),
       ),
     );
@@ -108,77 +87,331 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
 
   @override
   Widget build(BuildContext context) {
+    final isWide = MediaQuery.of(context).size.width >= 960;
+
     return Material(
       color: Colors.transparent,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildHeader(),
-          const SizedBox(height: 16),
+          // 1. Indicateurs Synthétiques avec Ondes Fluides
+          _buildCashierMetricsRow(),
+          const SizedBox(height: 18),
+
+          // 2. Barre de titre et action
+          _buildActionBar(isWide),
+          const SizedBox(height: 14),
+
+          // 3. Tableau de données principal
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: K.primary))
-                : _pendingInvoices.isEmpty
-                    ? _buildEmptyState()
-                    : ListView.separated(
-                        itemCount: _pendingInvoices.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final invoice = _pendingInvoices[index];
-                          return _buildInvoiceCard(invoice);
-                        },
-                      ),
+                ? const Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFF0067C0),
+                strokeWidth: 2.2,
+              ),
+            )
+                : Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFFFF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0x18000000), width: 1),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 12,
+                    offset: Offset(0, 3),
+                  ),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: _pendingInvoices.isEmpty
+                  ? _buildEmptyState()
+                  : isWide
+                  ? _buildDesktopDataTable()
+                  : _buildMobileDataRows(),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildHeader() {
+  // ---------------------------------------------------------------------------
+  // 1. LES CARTES DE MÉTRIQUES STYLISÉES AVEC ONDES FLUIDES (WINDOWS BLOOM)
+  // ---------------------------------------------------------------------------
+  Widget _buildCashierMetricsRow() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 740;
+
+        final cards = [
+          _buildWaveMetricCard(
+            title: "FACTURES EN ATTENTE",
+            value: "${_pendingInvoices.length}",
+            subtitle: "Règlements à percevoir",
+            badge: "À Traiter",
+            icon: Icons.receipt_long_outlined,
+            gradient: const [
+              Color(0xFF004E8C),
+              Color(0xFF0067C0),
+              Color(0xFF2886DE),
+            ],
+            waveSeed: 1.2,
+          ),
+          _buildWaveMetricCard(
+            title: "TOTAL À ENCAISSER",
+            value: "${_cumulativeTotal.toStringAsFixed(0)} \$",
+            subtitle: "Montant cumulé TTC",
+            badge: "Encaissement",
+            icon: Icons.payments_outlined,
+            gradient: const [
+              Color(0xFF0A3B5C),
+              Color(0xFF165B8C),
+              Color(0xFF3A89C9),
+            ],
+            waveSeed: 2.4,
+          ),
+          _buildWaveMetricCard(
+            title: "MODE AUTORISÉ",
+            value: "Espèces",
+            subtitle: "Devise : CASH (USD)",
+            badge: "Guichet",
+            icon: Icons.point_of_sale_outlined,
+            gradient: const [
+              Color(0xFF1E293B),
+              Color(0xFF334155),
+              Color(0xFF475569),
+            ],
+            waveSeed: 3.6,
+          ),
+        ];
+
+        if (isNarrow) {
+          return Column(
+            children: [
+              cards[0],
+              const SizedBox(height: 12),
+              cards[1],
+              const SizedBox(height: 12),
+              cards[2],
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: cards[0]),
+            const SizedBox(width: 14),
+            Expanded(child: cards[1]),
+            const SizedBox(width: 14),
+            Expanded(child: cards[2]),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildWaveMetricCard({
+    required String title,
+    required String value,
+    required String subtitle,
+    required String badge,
+    required IconData icon,
+    required List<Color> gradient,
+    required double waveSeed,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFFFF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0x18000000), width: 1),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Bannière supérieure avec ondulations vectorielles
+          SizedBox(
+            height: 64,
+            child: Stack(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: gradient,
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: InvoiceMetricWavePainter(waveSeed: waveSeed),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(icon, color: Colors.white, size: 16),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.25),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          badge,
+                          style: const TextStyle(
+                            fontFamily: kAppFontFamily,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Pied de carte blanc avec Métrique & Libellés
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontFamily: kAppFontFamily,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF64748B),
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            value,
+                            style: const TextStyle(
+                              fontFamily: kAppFontFamily,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F172A),
+                              letterSpacing: -0.6,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              subtitle,
+                              style: const TextStyle(
+                                fontFamily: kAppFontFamily,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w400,
+                                color: Color(0xFF94A3B8),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.more_horiz_rounded,
+                  size: 16,
+                  color: Color(0xFFCBD5E1),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2. BARRE D'ACTIONS
+  // ---------------------------------------------------------------------------
+  Widget _buildActionBar(bool isWide) {
     return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: K.success.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(K.radiusSm),
-          ),
-          child: const Icon(Icons.check_circle_rounded, color: K.success, size: 24),
-        ),
-        const SizedBox(width: 12),
         const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Validation des factures',
+              'Validation des Encaissements',
               style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: K.textPrimary,
+                fontFamily: kAppFontFamily,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
+                letterSpacing: -0.3,
               ),
             ),
+            SizedBox(height: 2),
             Text(
-              'Validez les factures en attente',
+              'Confirmez la réception des règlements au comptoir pour valider la vente',
               style: TextStyle(
-                color: K.textMuted,
-                fontSize: 13,
+                fontFamily: kAppFontFamily,
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+                color: Color(0xFF64748B),
               ),
             ),
           ],
         ),
+
         const Spacer(),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: K.info.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(K.radiusXl),
-          ),
-          child: Text(
-            '${_pendingInvoices.length} en attente',
-            style: const TextStyle(
-              color: K.info,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+
+        SizedBox(
+          height: 38,
+          child: OutlinedButton.icon(
+            onPressed: _isLoading ? null : _loadPendingInvoices,
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Actualiser'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF0F172A),
+              side: const BorderSide(color: Color(0x20000000)),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              textStyle: const TextStyle(
+                fontFamily: kAppFontFamily,
+                fontWeight: FontWeight.w600,
+                fontSize: 12.5,
+              ),
             ),
           ),
         ),
@@ -186,194 +419,351 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
     );
   }
 
-  Widget _buildInvoiceCard(Map<String, dynamic> invoice) {
-    final total = double.tryParse(invoice['total_ttc']?.toString() ?? '0') ?? 0;
-    final client = invoice['client_nom'] as String? ?? 'Client';
-    final numero = invoice['numero_facture'] as String? ?? '';
-    final date = invoice['created_at'] as String? ?? '';
-    
-    String formattedDate = '';
-    try {
-      final dateTime = DateTime.parse(date);
-      formattedDate = '${dateTime.day}/${dateTime.month}/${dateTime.year}';
-    } catch (e) {
-      formattedDate = date.substring(0, 10);
-    }
+  // ---------------------------------------------------------------------------
+  // 3. TABLEAU DE DONNÉES DESKTOP
+  // ---------------------------------------------------------------------------
+  Widget _buildDesktopDataTable() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.vertical,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                headingRowHeight: 42,
+                dataRowMinHeight: 48,
+                dataRowMaxHeight: 48,
+                horizontalMargin: 20,
+                columnSpacing: 26,
+                dividerThickness: 1,
+                columns: const [
+                  DataColumn(label: Text("N° FACTURE", style: _headerStyle)),
+                  DataColumn(label: Text("DATE ÉMISSION", style: _headerStyle)),
+                  DataColumn(label: Text("CLIENT", style: _headerStyle)),
+                  DataColumn(label: Text("MONTANT TTC", style: _headerStyle)),
+                  DataColumn(label: Text("STATUT", style: _headerStyle)),
+                  DataColumn(label: Text("ACTIONS", style: _headerStyle)),
+                ],
+                rows: _pendingInvoices.map((invoice) {
+                  final total = double.tryParse(invoice['total_ttc']?.toString() ?? '0') ?? 0;
+                  final client = invoice['client_nom'] as String? ?? 'Client de passage';
+                  final numero = invoice['numero_facture'] as String? ?? '—';
+                  final date = invoice['created_at'] as String? ?? '';
+                  final formattedDate = _formatDate(date);
 
-    // ✅ Encapsuler dans Material
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: K.surface,
-          borderRadius: BorderRadius.circular(K.radiusSm),
-          border: Border.all(color: K.border),
-          boxShadow: [K.subtleShadow],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: K.warning.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(K.radiusSm),
-                  ),
-                  child: const Icon(Icons.pending_rounded, color: K.warning, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        client,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: K.textPrimary,
+                  return DataRow(
+                    cells: [
+                      // N° Facture
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0x10000000)),
+                          ),
+                          child: Text(
+                            numero,
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1E293B),
+                              fontSize: 12,
+                            ),
+                          ),
                         ),
                       ),
-                      Text(
-                        numero,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: K.textMuted,
+
+                      // Date
+                      DataCell(
+                        Text(
+                          formattedDate,
+                          style: const TextStyle(
+                            fontFamily: kAppFontFamily,
+                            color: Color(0xFF64748B),
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ),
+
+                      // Client
+                      DataCell(
+                        Text(
+                          client,
+                          style: const TextStyle(
+                            fontFamily: kAppFontFamily,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F172A),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+
+                      // Montant TTC
+                      DataCell(
+                        Text(
+                          '${total.toStringAsFixed(2)} \$',
+                          style: const TextStyle(
+                            fontFamily: kAppFontFamily,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0067C0),
+                            fontSize: 13.5,
+                          ),
+                        ),
+                      ),
+
+                      // Statut
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.schedule_rounded, size: 12, color: Color(0xFFB45309)),
+                              SizedBox(width: 4),
+                              Text(
+                                'EN COURS',
+                                style: TextStyle(
+                                  fontFamily: kAppFontFamily,
+                                  color: Color(0xFFB45309),
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Actions
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Bouton Voir
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const CashierSales(initialFilter: 'en_cours'),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.visibility_outlined, size: 14),
+                              label: const Text('Voir'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF475569),
+                                side: const BorderSide(color: Color(0x20000000)),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                textStyle: const TextStyle(
+                                  fontFamily: kAppFontFamily,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+
+                            // Bouton Encaisser
+                            ElevatedButton.icon(
+                              onPressed: _isActionLoading
+                                  ? null
+                                  : () async => await _validateInvoiceWithModePicker(invoice),
+                              icon: _isActionLoading
+                                  ? const SizedBox(
+                                width: 13,
+                                height: 13,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                                  : const Icon(Icons.check_rounded, size: 15),
+                              label: Text(_isActionLoading ? '...' : 'Encaisser'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0067C0),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                textStyle: const TextStyle(
+                                  fontFamily: kAppFontFamily,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      '\$${total.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: K.success,
-                      ),
-                    ),
-                    Text(
-                      formattedDate,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: K.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  );
+                }).toList(),
+              ),
             ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                // ✅ Bouton Voir avec Material
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CashierSales(initialFilter: 'en_cours'),
-                        ),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(K.radiusSm),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: K.border),
-                        borderRadius: BorderRadius.circular(K.radiusSm),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.visibility_rounded, size: 16, color: K.primary),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Voir',
-                            style: TextStyle(
-                              color: K.primary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // ✅ Bouton Valider
-               // Dans _buildInvoiceCard - Remplacer le bouton Valider
-
-ElevatedButton.icon(
-  onPressed: _isActionLoading ? null : () async {
-    // ✅ Afficher le dialogue avec sélecteur de mode
-    await _validateInvoiceWithModePicker(invoice);
-  },
-  icon: _isActionLoading
-      ? const SizedBox(
-          width: 16,
-          height: 16,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: Colors.white,
           ),
-        )
-      : const Icon(Icons.check_circle_rounded, size: 16),
-  label: Text(_isActionLoading ? '...' : 'Valider'),
-  style: ElevatedButton.styleFrom(
-    backgroundColor: K.success,
-    foregroundColor: Colors.white,
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(K.radiusSm),
-    ),
-  ),
-),
-              ],
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Future<bool?> _showValidationDialog(Map<String, dynamic> invoice) {
+  static const TextStyle _headerStyle = TextStyle(
+    fontFamily: kAppFontFamily,
+    fontSize: 10.5,
+    fontWeight: FontWeight.w700,
+    color: Color(0xFF64748B),
+    letterSpacing: 0.6,
+  );
+
+  // ---------------------------------------------------------------------------
+  // 4. LIGNES MOBILE
+  // ---------------------------------------------------------------------------
+  Widget _buildMobileDataRows() {
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: _pendingInvoices.length,
+      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0x12000000)),
+      itemBuilder: (context, index) {
+        final invoice = _pendingInvoices[index];
+        final total = double.tryParse(invoice['total_ttc']?.toString() ?? '0') ?? 0;
+        final client = invoice['client_nom'] as String? ?? 'Client';
+        final numero = invoice['numero_facture'] as String? ?? '';
+        final date = invoice['created_at'] as String? ?? '';
+        final formattedDate = _formatDate(date);
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    numero,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: Color(0xFF0067C0),
+                    ),
+                  ),
+                  Text(
+                    '${total.toStringAsFixed(2)} \$',
+                    style: const TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: Color(0xFF0067C0),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                client,
+                style: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13.5,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              Text(
+                formattedDate,
+                style: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontSize: 11.5,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const CashierSales(initialFilter: 'en_cours'),
+                        ),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF475569),
+                      side: const BorderSide(color: Color(0x20000000)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    child: const Text('Détails'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _isActionLoading
+                        ? null
+                        : () async => await _validateInvoiceWithModePicker(invoice),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0067C0),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    child: const Text('Encaisser'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // DIALOGUE D'ENCAISSEMENT (Design Windows 11)
+  // ---------------------------------------------------------------------------
+  Future<void> _validateInvoiceWithModePicker(Map<String, dynamic> invoice) async {
     final total = double.tryParse(invoice['total_ttc']?.toString() ?? '0') ?? 0;
     final client = invoice['client_nom'] as String? ?? 'Client';
     final numero = invoice['numero_facture'] as String? ?? '';
 
-    return showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(K.radiusXl),
-        ),
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFFFFFFFF),
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+        actionsPadding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
-                color: K.success.withOpacity(0.1),
-                shape: BoxShape.circle,
+                color: const Color(0xFFE8F2FB),
+                borderRadius: BorderRadius.circular(6),
               ),
-              child: const Icon(Icons.check_circle_rounded, color: K.success),
+              child: const Icon(Icons.payments_outlined, color: Color(0xFF0067C0), size: 20),
             ),
             const SizedBox(width: 12),
             const Text(
-              'Valider la facture',
+              'Encaisser en espèces',
               style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: K.textPrimary,
+                fontFamily: kAppFontFamily,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1F1F1F),
               ),
             ),
           ],
@@ -383,21 +773,31 @@ ElevatedButton.icon(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Voulez-vous valider la facture $numero ?',
-              style: const TextStyle(fontSize: 14, height: 1.5),
+              'Confirmez la réception du règlement au comptoir pour finaliser la facture $numero.',
+              style: const TextStyle(
+                fontFamily: kAppFontFamily,
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: Color(0xFF5F6368),
+                height: 1.45,
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: K.surfaceAlt,
-                borderRadius: BorderRadius.circular(K.radiusSm),
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0x14000000)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildInfoRow('Client', client),
-                  _buildInfoRow('Montant', '\$${total.toStringAsFixed(0)}'),
+                  _buildDialogInfoRow('Client', client),
+                  const SizedBox(height: 6),
+                  _buildDialogInfoRow('Montant net', '${total.toStringAsFixed(2)} \$'),
+                  const SizedBox(height: 6),
+                  _buildDialogInfoRow('Mode de règlement', 'CASH (USD)'),
                 ],
               ),
             ),
@@ -405,233 +805,232 @@ ElevatedButton.icon(
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Annuler', style: TextStyle(color: K.textMuted)),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF4A4A4A),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            ),
+            child: const Text(
+              'Annuler',
+              style: TextStyle(
+                fontFamily: kAppFontFamily,
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+              ),
+            ),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: K.success,
+              backgroundColor: const Color(0xFF0067C0),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(K.radiusSm),
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            ),
+            child: const Text(
+              'Valider le paiement',
+              style: TextStyle(
+                fontFamily: kAppFontFamily,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
               ),
             ),
-            child: const Text('Valider'),
           ),
         ],
       ),
     );
+
+    if (confirmed == true) {
+      await _validateInvoiceWithMode(invoice);
+    }
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Text(
-            '$label: ',
+  Widget _buildDialogInfoRow(String label, String value) {
+    return Row(
+      children: [
+        Text(
+          '$label : ',
+          style: const TextStyle(
+            fontFamily: kAppFontFamily,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF64748B),
+            fontSize: 12.5,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
             style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              color: K.textMuted,
-              fontSize: 12,
+              fontFamily: kAppFontFamily,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0F172A),
+              fontSize: 13,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: K.textPrimary,
-                fontSize: 12,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  // Dans InvoiceValidationView - Modifier _validateInvoice
+  Future<void> _validateInvoiceWithMode(Map<String, dynamic> invoice) async {
+    setState(() => _isActionLoading = true);
+    try {
+      final user = Provider.of<AuthProvider>(context, listen: false).user;
+      if (user == null) {
+        _showSnackBar('Utilisateur non connecté', const Color(0xFFC42B1C));
+        return;
+      }
 
-Future<void> _validateInvoice(Map<String, dynamic> invoice) async {
-  setState(() => _isActionLoading = true);
-  try {
-    final user = Provider.of<AuthProvider>(context, listen: false).user;
-    if (user == null) {
-      _showSnackBar('Utilisateur non connecté', Colors.red);
-      return;
+      final service = AdminService(user.token);
+      final result = await service.validateInvoiceWithMode(
+        invoice['id'] as int,
+        modePaiement: 'cash',
+      );
+
+      if (result['success'] == true) {
+        _showSnackBar('Facture encaissée avec succès', const Color(0xFF107C41));
+        _loadPendingInvoices();
+      } else {
+        _showSnackBar(result['message'] ?? 'Erreur de validation', const Color(0xFFC42B1C));
+      }
+    } catch (e) {
+      _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
+    } finally {
+      if (mounted) setState(() => _isActionLoading = false);
     }
-
-    final service = AdminService(user.token);
-    
-    // ✅ Utiliser la méthode avec mode_paiement
-    final result = await service.validateInvoiceWithMode(
-      invoice['id'] as int,
-      modePaiement: 'especes', // ou récupérer depuis un sélecteur
-    );
-
-    if (result['success'] == true) {
-      _showSnackBar('✅ Facture validée avec succès', Colors.green);
-      _loadPendingInvoices();
-    } else {
-      _showSnackBar('❌ ${result['message'] ?? 'Erreur de validation'}', Colors.red);
-    }
-  } catch (e) {
-    _showSnackBar('❌ Erreur: ${e.toString()}', Colors.red);
-  } finally {
-    setState(() => _isActionLoading = false);
   }
-}
-// Dans InvoiceValidationView - Ajouter un sélecteur de mode paiement
 
-Future<void> _validateInvoiceWithModePicker(Map<String, dynamic> invoice) async {
-  String selectedMode = 'especes';
-  
-  final result = await showDialog<bool>(
-    context: context,
-    barrierDismissible: true,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setState) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(K.radiusXl),
-          ),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: K.success.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.payment_rounded, color: K.success),
+  String _formatDate(String date) {
+    try {
+      final dt = DateTime.parse(date);
+      return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+    } catch (_) {
+      return date.isNotEmpty && date.length >= 10 ? date.substring(0, 10) : date;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // ÉTAT VIDE
+  // ---------------------------------------------------------------------------
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF1F5F9),
+                shape: BoxShape.circle,
               ),
-              const SizedBox(width: 12),
-              const Text(
-                'Mode de paiement',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: K.textPrimary,
-                ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Sélectionnez le mode de paiement :',
-                style: TextStyle(fontSize: 14, height: 1.5),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: K.border),
-                  borderRadius: BorderRadius.circular(K.radiusSm),
-                ),
-                child: DropdownButton<String>(
-                  value: selectedMode,
-                  isExpanded: true,
-                  underline: Container(),
-                  items: const [
-                    DropdownMenuItem(value: 'especes', child: Text('💰 Espèces')),
-                    DropdownMenuItem(value: 'carte', child: Text('💳 Carte bancaire')),
-                    DropdownMenuItem(value: 'mobile_money', child: Text('📱 Mobile Money')),
-                    DropdownMenuItem(value: 'cheque', child: Text('📝 Chèque')),
-                    DropdownMenuItem(value: 'transfert', child: Text('🏦 Virement bancaire')),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => selectedMode = value);
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Annuler', style: TextStyle(color: K.textMuted)),
+              child: const Icon(Icons.check_circle_outline_rounded, size: 32, color: Color(0xFF107C41)),
             ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: K.success,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(K.radiusSm),
+            const SizedBox(height: 14),
+            const Text(
+              'Toutes les factures sont encaissées !',
+              style: TextStyle(
+                fontFamily: kAppFontFamily,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Aucun règlement en attente de validation pour le moment.',
+              style: TextStyle(
+                fontFamily: kAppFontFamily,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w400,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _loadPendingInvoices,
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: const Text('Actualiser le statut'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF0067C0),
+                side: const BorderSide(color: Color(0xFF0067C0)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                textStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              child: const Text('Valider'),
             ),
           ],
-        );
-      },
-    ),
-  );
-
-  if (result == true) {
-    // Appeler la validation avec le mode sélectionné
-    await _validateInvoiceWithMode(invoice, selectedMode);
-  }
-}
-
-// Nouvelle méthode de validation avec mode
-Future<void> _validateInvoiceWithMode(Map<String, dynamic> invoice, String mode) async {
-  setState(() => _isActionLoading = true);
-  try {
-    final user = Provider.of<AuthProvider>(context, listen: false).user;
-    if (user == null) {
-      _showSnackBar('Utilisateur non connecté', Colors.red);
-      return;
-    }
-
-    final service = AdminService(user.token);
-    final result = await service.validateInvoiceWithMode(
-      invoice['id'] as int,
-      modePaiement: mode,
-    );
-
-    if (result['success'] == true) {
-      _showSnackBar('✅ Facture validée avec succès', Colors.green);
-      _loadPendingInvoices();
-    } else {
-      _showSnackBar('❌ ${result['message'] ?? 'Erreur de validation'}', Colors.red);
-    }
-  } catch (e) {
-    _showSnackBar('❌ Erreur: ${e.toString()}', Colors.red);
-  } finally {
-    setState(() => _isActionLoading = false);
-  }
-}
-  Widget _buildEmptyState() {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.check_circle_rounded, size: 64, color: K.success),
-          SizedBox(height: 16),
-          Text(
-            'Toutes les factures sont validées !',
-            style: TextStyle(
-              color: K.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Aucune facture en attente de validation',
-            style: TextStyle(color: K.textMuted, fontSize: 13),
-          ),
-        ],
+        ),
       ),
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// PAINTER VECTORIEL : ONDES FLUIDES DES CARTES DE VALIDATION FACTURES
+// ---------------------------------------------------------------------------
+class InvoiceMetricWavePainter extends CustomPainter {
+  final double waveSeed;
+
+  InvoiceMetricWavePainter({required this.waveSeed});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final strokePaint = Paint()
+      ..color = Colors.white.withOpacity(0.22)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.white.withOpacity(0.20),
+          Colors.white.withOpacity(0.02),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..style = PaintingStyle.fill;
+
+    final path = Path();
+    path.moveTo(0, size.height * 0.85);
+
+    path.cubicTo(
+      size.width * 0.28,
+      size.height * (0.35 + 0.12 * math.sin(waveSeed)),
+      size.width * 0.60,
+      size.height * (0.95 - 0.12 * math.cos(waveSeed)),
+      size.width,
+      size.height * 0.40,
+    );
+
+    path.lineTo(size.width, size.height);
+    path.lineTo(0, size.height);
+    path.close();
+
+    canvas.drawPath(path, fillPaint);
+
+    final ridgePath = Path();
+    ridgePath.moveTo(0, size.height * 0.85);
+    ridgePath.cubicTo(
+      size.width * 0.28,
+      size.height * (0.35 + 0.12 * math.sin(waveSeed)),
+      size.width * 0.60,
+      size.height * (0.95 - 0.12 * math.cos(waveSeed)),
+      size.width,
+      size.height * 0.40,
+    );
+    canvas.drawPath(ridgePath, strokePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant InvoiceMetricWavePainter oldDelegate) =>
+      oldDelegate.waveSeed != waveSeed;
 }

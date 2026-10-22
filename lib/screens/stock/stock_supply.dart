@@ -1,54 +1,12 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:tek_app/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../api/admin_service.dart';
 import '../../models/product_model.dart';
 import '../../models/depot_model.dart';
 import '../../models/stock_model.dart';
-
-/// ---------------------------------------------------------------------------
-/// TOKENS DE DESIGN — palette officielle de l'application
-/// ---------------------------------------------------------------------------
-class K {
-  static const bg = Color(0xFFF5F7FA);
-  static const surface = Color(0xFFFFFFFF);
-  static const surfaceAlt = Color(0xFFECEFF1);
-  static const border = Color(0xFFCFD8DC);
-  static const primary = Color(0xFF455A64);
-  static const accent = Color(0xFF455A64);
-  static const accentSoft = Color(0x1A455A64);
-  static const textPrimary = Color(0xFF263238);
-  static const textMuted = Color(0xFF78909C);
-  static const success = Color(0xFF43A047);
-  static const danger = Color(0xFFE53935);
-  static const info = Color(0xFF1E88E5);
-  static const warning = Color(0xFFFB8C00);
-
-  static const sidebarGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0xFF37474F), Color(0xFF546E7A)],
-  );
-
-  static const Duration anim = Duration(milliseconds: 280);
-  static const double radius = 16.0;
-  static const double radiusSm = 10.0;
-  static const double radiusXs = 6.0;
-  static const double radiusXl = 20.0;
-
-  static BoxShadow get cardShadow => BoxShadow(
-        color: Colors.black.withOpacity(0.055),
-        blurRadius: 18,
-        spreadRadius: 0,
-        offset: const Offset(0, 4),
-      );
-
-  static BoxShadow get subtleShadow => BoxShadow(
-        color: Colors.black.withOpacity(0.03),
-        blurRadius: 8,
-        offset: const Offset(0, 2),
-      );
-}
 
 class StockSupply extends StatefulWidget {
   const StockSupply({super.key});
@@ -57,7 +15,8 @@ class StockSupply extends StatefulWidget {
   State<StockSupply> createState() => _StockSupplyState();
 }
 
-class _StockSupplyState extends State<StockSupply> with SingleTickerProviderStateMixin {
+class _StockSupplyState extends State<StockSupply>
+    with SingleTickerProviderStateMixin {
   // Données
   List<Depot> _depots = [];
   List<Product> _products = [];
@@ -65,7 +24,6 @@ class _StockSupplyState extends State<StockSupply> with SingleTickerProviderStat
   List<Product> _filteredProducts = [];
   int? _selectedDepotId;
   bool _isLoading = true;
-  bool _isSubmitting = false;
   final TextEditingController _searchCtrl = TextEditingController();
 
   // Animation
@@ -76,7 +34,7 @@ class _StockSupplyState extends State<StockSupply> with SingleTickerProviderStat
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 240),
       vsync: this,
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -92,28 +50,19 @@ class _StockSupplyState extends State<StockSupply> with SingleTickerProviderStat
     super.dispose();
   }
 
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // LOAD DATA
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   Future<void> _loadData() async {
-    print('📦 Chargement des données...');
     setState(() => _isLoading = true);
     try {
       final user = Provider.of<AuthProvider>(context, listen: false).user;
       if (user != null) {
         final service = AdminService(user.token);
-        
-        print('🔍 Récupération des dépôts...');
+
         final depots = await service.getDepots();
-        print('✅ Dépôts récupérés: ${depots.length}');
-        
-        print('🔍 Récupération des produits...');
         final products = await service.getAllProducts();
-        print('✅ Produits récupérés: ${products.length}');
-        
-        print('🔍 Récupération des stocks...');
         final stocks = await service.getStocks();
-        print('✅ Stocks récupérés: ${stocks.length}');
 
         setState(() {
           _depots = depots;
@@ -122,46 +71,38 @@ class _StockSupplyState extends State<StockSupply> with SingleTickerProviderStat
           _stocks = stocks;
           if (_depots.isNotEmpty && _selectedDepotId == null) {
             _selectedDepotId = _depots.first.id;
-            print('🏢 Dépôt sélectionné par défaut: ${_depots.first.nom} (ID: ${_depots.first.id})');
           }
           _isLoading = false;
         });
         _animationController.forward();
       }
     } catch (e) {
-      print('❌ Erreur chargement: $e');
       setState(() => _isLoading = false);
-      _showSnackBar('Erreur: ${e.toString()}', Colors.red);
+      _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
     }
   }
 
   Future<void> _refreshData() async {
-    print('🔄 Rafraîchissement des données...');
     await _loadData();
   }
 
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // FILTRES
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   void _filterProducts() {
     final query = _searchCtrl.text.toLowerCase();
-    print('🔍 Recherche: "$query"');
     setState(() {
       _filteredProducts = _products.where((product) {
-        final matchesSearch = product.nom.toLowerCase().contains(query) ||
+        return product.nom.toLowerCase().contains(query) ||
             product.code.toLowerCase().contains(query);
-        return matchesSearch;
       }).toList();
-      print('📊 Résultats: ${_filteredProducts.length} produits trouvés');
     });
   }
 
-  // ---------------------------------------------------------------------
-  // RAVITAILLEMENT AVEC MODALE
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // RAVITAILLEMENT AVEC MODALE WINDOWS 11 FLUENT
+  // ---------------------------------------------------------------------------
   void _showSupplyModal(Product product) {
-    print('📦 Ouverture modale pour: ${product.nom} (ID: ${product.id})');
-    
     final TextEditingController quantityCtrl = TextEditingController(text: '1');
     int selectedQuantity = 1;
     bool isSubmitting = false;
@@ -169,263 +110,238 @@ class _StockSupplyState extends State<StockSupply> with SingleTickerProviderStat
     showDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: Colors.black.withOpacity(0.6),
-      builder: (context) => StatefulBuilder(
+      builder: (dialogContext) => StatefulBuilder(
         builder: (context, setStateModal) {
           return Dialog(
             elevation: 0,
             backgroundColor: Colors.transparent,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             child: Container(
-              width: MediaQuery.of(context).size.width >= 600 ? 500 : double.infinity,
+              width: 520,
               constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.85,
-                maxWidth: 500,
+                maxHeight: MediaQuery.of(context).size.height * 0.88,
+                maxWidth: 520,
               ),
               decoration: BoxDecoration(
-                color: K.surface,
-                borderRadius: BorderRadius.circular(K.radiusXl),
-                border: Border.all(color: K.border, width: 1),
-                boxShadow: [
+                color: const Color(0xFFFFFFFF),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0x18000000), width: 1),
+                boxShadow: const [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: Color(0x18000000),
                     blurRadius: 30,
-                    spreadRadius: 5,
-                    offset: const Offset(0, 10),
+                    offset: Offset(0, 10),
                   ),
                 ],
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(K.radiusXl),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [K.success, K.success.withOpacity(0.8)],
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // En-tête Fluent sobre
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 18, 16, 16),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F2FB),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.local_shipping_outlined,
+                            color: Color(0xFF0067C0),
+                            size: 20,
+                          ),
                         ),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(K.radiusSm),
-                            ),
-                            child: const Icon(
-                              Icons.local_shipping_rounded,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Ravitaillement',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                Text(
-                                  'Ajoutez des produits au stock',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.1),
-                              shape: BoxShape.circle,
-                            ),
-                            child: IconButton(
-                              icon: const Icon(Icons.close_rounded, color: Colors.white),
-                              onPressed: isSubmitting ? null : () {
-                                print('❌ Annulation du ravitaillement');
-                                Navigator.pop(context);
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
+                        const SizedBox(width: 12),
+                        const Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildProductInfo(product),
-                            const SizedBox(height: 20),
-                            _buildDepotSelectorModal(setStateModal),
-                            const SizedBox(height: 20),
-                            _buildQuantitySelector(
-                              quantityCtrl,
-                              selectedQuantity,
-                              setStateModal,
-                              (value) => selectedQuantity = value,
+                            Text(
+                              'Ravitaillement de Stock',
+                              style: TextStyle(
+                                fontFamily: kAppFontFamily,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0F172A),
+                              ),
                             ),
-                            const SizedBox(height: 20),
-                            _buildStockSummary(product, selectedQuantity),
+                            SizedBox(height: 2),
+                            Text(
+                              'Entrée de marchandises dans l\'entrepôt sélectionné',
+                              style: TextStyle(
+                                fontFamily: kAppFontFamily,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
                           ],
                         ),
-                      ),
-                    ),
-
-                    Container(
-                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: K.border, width: 1),
+                        const Spacer(),
+                        IconButton(
+                          splashRadius: 16,
+                          icon: const Icon(Icons.close_rounded, size: 19),
+                          color: const Color(0xFF64748B),
+                          onPressed: isSubmitting ? null : () => Navigator.pop(dialogContext),
                         ),
-                      ),
-                      child: Row(
+                      ],
+                    ),
+                  ),
+
+                  const Divider(height: 1, thickness: 1, color: Color(0x14000000)),
+
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(22),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: isSubmitting ? null : () {
-                                print('❌ Annulation du ravitaillement');
-                                Navigator.pop(context);
-                              },
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                side: const BorderSide(color: K.border),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(K.radiusSm),
-                                ),
-                              ),
-                              child: const Text(
-                                'Annuler',
-                                style: TextStyle(color: K.textMuted),
-                              ),
-                            ),
+                          _buildProductInfo(product),
+                          const SizedBox(height: 18),
+                          _buildDepotSelectorModal(setStateModal),
+                          const SizedBox(height: 18),
+                          _buildQuantitySelector(
+                            quantityCtrl,
+                            selectedQuantity,
+                            setStateModal,
+                                (value) => selectedQuantity = value,
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            flex: 2,
-                            child: ElevatedButton(
-                              onPressed: isSubmitting ? null : () async {
-                                final quantity = int.tryParse(quantityCtrl.text) ?? 1;
-                                print('🚀 Lancement du ravitaillement...');
-                                print('📦 Produit: ${product.nom} (ID: ${product.id})');
-                                print('🏢 Dépôt ID: $_selectedDepotId');
-                                print('📊 Quantité: $quantity');
-
-                                if (_selectedDepotId == null) {
-                                  print('❌ Aucun dépôt sélectionné');
-                                  _showSnackBar('Veuillez sélectionner un dépôt', Colors.orange);
-                                  return;
-                                }
-
-                                if (quantity <= 0) {
-                                  print('❌ Quantité invalide: $quantity');
-                                  _showSnackBar('La quantité doit être supérieure à 0', Colors.orange);
-                                  return;
-                                }
-
-                                setStateModal(() => isSubmitting = true);
-
-                                try {
-                                  print('📤 Appel API pour ravitailler...');
-                                  await _supplyProduct(product, _selectedDepotId!, quantity);
-                                  print('✅ Ravitaillement réussi !');
-                                  
-                                  if (!context.mounted) return;
-                                  Navigator.pop(context);
-                                } catch (e) {
-                                  print('❌ Erreur ravitaillement: $e');
-                                  _showSnackBar('Erreur: ${e.toString()}', Colors.red);
-                                } finally {
-                                  setStateModal(() => isSubmitting = false);
-                                }
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: K.success,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(K.radiusSm),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: isSubmitting
-                                  ? const SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.5,
-                                        valueColor: AlwaysStoppedAnimation(Colors.white),
-                                      ),
-                                    )
-                                  : Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        const Icon(Icons.check_rounded, size: 20),
-                                        const SizedBox(width: 8),
-                                        const Text('Ravitaillement'),
-                                      ],
-                                    ),
-                            ),
-                          ),
+                          const SizedBox(height: 18),
+                          _buildStockSummary(product, selectedQuantity),
                         ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+
+                  const Divider(height: 1, thickness: 1, color: Color(0x14000000)),
+
+                  // Pied de dialogue avec boutons d'actions
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 12, 22, 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton(
+                          onPressed: isSubmitting ? null : () => Navigator.pop(dialogContext),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF475569),
+                            side: const BorderSide(color: Color(0x20000000)),
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: const Text(
+                            'Annuler',
+                            style: TextStyle(
+                              fontFamily: kAppFontFamily,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        ElevatedButton(
+                          onPressed: isSubmitting
+                              ? null
+                              : () async {
+                            final quantity = int.tryParse(quantityCtrl.text) ?? 1;
+
+                            if (_selectedDepotId == null) {
+                              _showSnackBar('Veuillez sélectionner un dépôt', const Color(0xFFD97706));
+                              return;
+                            }
+
+                            if (quantity <= 0) {
+                              _showSnackBar('La quantité doit être supérieure à 0', const Color(0xFFD97706));
+                              return;
+                            }
+
+                            setStateModal(() => isSubmitting = true);
+
+                            try {
+                              await _supplyProduct(product, _selectedDepotId!, quantity);
+                              if (!context.mounted) return;
+                              Navigator.pop(dialogContext);
+                            } catch (_) {
+                              // Géré dans _supplyProduct
+                            } finally {
+                              if (mounted) setStateModal(() => isSubmitting = false);
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0067C0),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: isSubmitting
+                              ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation(Colors.white),
+                            ),
+                          )
+                              : const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_rounded, size: 16),
+                              SizedBox(width: 6),
+                              Text(
+                                'Valider le ravitaillement',
+                                style: TextStyle(
+                                  fontFamily: kAppFontFamily,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           );
         },
       ),
-    ).then((_) {
-      print('🔚 Modale fermée');
-    });
+    );
   }
 
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // WIDGETS DE LA MODALE
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   Widget _buildProductInfo(Product product) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: K.surfaceAlt,
-        borderRadius: BorderRadius.circular(K.radiusSm),
-        border: Border.all(color: K.border),
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0x14000000)),
       ),
       child: Row(
         children: [
           Container(
-            width: 50,
-            height: 50,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [K.accentSoft, K.primary.withOpacity(0.05)],
-              ),
-              borderRadius: BorderRadius.circular(K.radiusSm),
+              color: const Color(0xFFE8F2FB),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Center(
               child: Text(
-                product.code.substring(0, 1).toUpperCase(),
+                product.code.isNotEmpty ? product.code.substring(0, 1).toUpperCase() : 'P',
                 style: const TextStyle(
-                  color: K.primary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
+                  fontFamily: kAppFontFamily,
+                  color: Color(0xFF0067C0),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
                 ),
               ),
             ),
@@ -438,43 +354,38 @@ class _StockSupplyState extends State<StockSupply> with SingleTickerProviderStat
                 Text(
                   product.nom,
                   style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: K.textPrimary,
+                    fontFamily: kAppFontFamily,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: Color(0xFF0F172A),
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: K.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(K.radiusXl),
+                        color: const Color(0xFFE2E8F0),
+                        borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
                         product.code,
                         style: const TextStyle(
-                          color: K.primary,
+                          fontFamily: 'monospace',
+                          color: Color(0xFF1E293B),
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: K.info.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(K.radiusXl),
-                      ),
-                      child: Text(
-                        product.unite,
-                        style: const TextStyle(
-                          color: K.info,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Unité : ${product.unite}',
+                      style: const TextStyle(
+                        fontFamily: kAppFontFamily,
+                        color: Color(0xFF64748B),
+                        fontSize: 11.5,
                       ),
                     ),
                   ],
@@ -482,20 +393,13 @@ class _StockSupplyState extends State<StockSupply> with SingleTickerProviderStat
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: K.success.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(K.radiusXl),
-              border: Border.all(color: K.success.withOpacity(0.2)),
-            ),
-            child: Text(
-              '\$${product.prixVente.toStringAsFixed(0)}',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: K.success,
-                fontSize: 14,
-              ),
+          Text(
+            '${product.prixVente.toStringAsFixed(2)} \$',
+            style: const TextStyle(
+              fontFamily: kAppFontFamily,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0067C0),
+              fontSize: 14.5,
             ),
           ),
         ],
@@ -504,296 +408,195 @@ class _StockSupplyState extends State<StockSupply> with SingleTickerProviderStat
   }
 
   Widget _buildDepotSelectorModal(StateSetter setStateModal) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: K.surfaceAlt,
-        borderRadius: BorderRadius.circular(K.radiusSm),
-        border: Border.all(color: K.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.warehouse_rounded, color: K.primary, size: 18),
-              const SizedBox(width: 8),
-              const Text(
-                'Dépôt cible',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                  color: K.textPrimary,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: K.danger.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(K.radiusXl),
-                ),
-                child: const Text(
-                  'Obligatoire',
-                  style: TextStyle(
-                    color: K.danger,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'DÉPÔT DE DESTINATION',
+          style: TextStyle(
+            fontFamily: kAppFontFamily,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF475569),
+            letterSpacing: 0.6,
           ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: K.surface,
-              borderRadius: BorderRadius.circular(K.radiusSm),
-              border: Border.all(color: K.border),
-            ),
-            child: DropdownButton<int>(
-              value: _selectedDepotId,
-              isExpanded: true,
-              underline: Container(),
-              dropdownColor: K.surface,
-              items: _depots.map((depot) {
-                return DropdownMenuItem(
-                  value: depot.id,
-                  child: Row(
-                    children: [
-                      Icon(
-                        depot.estMagasin ? Icons.store_rounded : Icons.warehouse_rounded,
-                        color: K.primary,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        depot.nom,
-                        style: const TextStyle(color: K.textPrimary),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: K.info.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(K.radiusXl),
-                        ),
-                        child: Text(
-                          depot.estMagasin ? 'Magasin' : 'Entrepôt',
-                          style: const TextStyle(
-                            fontSize: 9,
-                            color: K.info,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                print('🔄 Changement de dépôt: $value');
-                setStateModal(() {
-                  _selectedDepotId = value;
-                });
-              },
-            ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
-        ],
-      ),
+          child: DropdownButton<int>(
+            value: _selectedDepotId,
+            isExpanded: true,
+            underline: const SizedBox(),
+            dropdownColor: const Color(0xFFFFFFFF),
+            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B), size: 20),
+            items: _depots.map((depot) {
+              return DropdownMenuItem(
+                value: depot.id,
+                child: Row(
+                  children: [
+                    Icon(
+                      depot.estMagasin ? Icons.storefront_outlined : Icons.warehouse_outlined,
+                      color: const Color(0xFF0067C0),
+                      size: 17,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      depot.nom,
+                      style: const TextStyle(
+                        fontFamily: kAppFontFamily,
+                        color: Color(0xFF0F172A),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+            onChanged: (value) {
+              setStateModal(() => _selectedDepotId = value);
+            },
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildQuantitySelector(
-    TextEditingController quantityCtrl,
-    int selectedQuantity,
-    StateSetter setStateModal,
-    Function(int) onQuantityChanged,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: K.surfaceAlt,
-        borderRadius: BorderRadius.circular(K.radiusSm),
-        border: Border.all(color: K.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.add_rounded, color: K.primary, size: 18),
-              const SizedBox(width: 8),
-              const Text(
-                'Quantité à ajouter',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                  color: K.textPrimary,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: K.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(K.radiusXl),
-                ),
-                child: const Text(
-                  'En unités',
-                  style: TextStyle(
-                    color: K.primary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
+      TextEditingController quantityCtrl,
+      int selectedQuantity,
+      StateSetter setStateModal,
+      Function(int) onQuantityChanged,
+      ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'QUANTITÉ À AJOUTER',
+          style: TextStyle(
+            fontFamily: kAppFontFamily,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF475569),
+            letterSpacing: 0.6,
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _buildQuantityButtonModal('-', () {
-                if (selectedQuantity > 1) {
-                  final newValue = selectedQuantity - 1;
-                  selectedQuantity = newValue;
-                  quantityCtrl.text = newValue.toString();
-                  onQuantityChanged(newValue);
-                  setStateModal(() {});
-                  print('📉 Quantité: $selectedQuantity');
-                }
-              }),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Container(
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: K.surface,
-                    borderRadius: BorderRadius.circular(K.radiusSm),
-                    border: Border.all(color: K.border),
-                  ),
-                  child: TextField(
-                    controller: quantityCtrl,
-                    keyboardType: TextInputType.number,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: K.textPrimary,
-                    ),
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(vertical: 8),
-                    ),
-                    onChanged: (value) {
-                      final int? parsed = int.tryParse(value);
-                      if (parsed != null && parsed > 0) {
-                        selectedQuantity = parsed;
-                        onQuantityChanged(parsed);
-                        print('📝 Quantité saisie: $selectedQuantity');
-                      }
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              _buildQuantityButtonModal('+', () {
-                final newValue = selectedQuantity + 1;
-                selectedQuantity = newValue;
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _buildQuantityStepBtn('-', () {
+              if (selectedQuantity > 1) {
+                final newValue = selectedQuantity - 1;
                 quantityCtrl.text = newValue.toString();
                 onQuantityChanged(newValue);
                 setStateModal(() {});
-                print('📈 Quantité: $selectedQuantity');
-              }),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildQuickChipModal(5, () {
-                selectedQuantity = 5;
-                quantityCtrl.text = '5';
-                onQuantityChanged(5);
-                setStateModal(() {});
-                print('⚡ Quantité rapide: 5');
-              }),
-              _buildQuickChipModal(10, () {
-                selectedQuantity = 10;
-                quantityCtrl.text = '10';
-                onQuantityChanged(10);
-                setStateModal(() {});
-                print('⚡ Quantité rapide: 10');
-              }),
-              _buildQuickChipModal(25, () {
-                selectedQuantity = 25;
-                quantityCtrl.text = '25';
-                onQuantityChanged(25);
-                setStateModal(() {});
-                print('⚡ Quantité rapide: 25');
-              }),
-              _buildQuickChipModal(50, () {
-                selectedQuantity = 50;
-                quantityCtrl.text = '50';
-                onQuantityChanged(50);
-                setStateModal(() {});
-                print('⚡ Quantité rapide: 50');
-              }),
-              _buildQuickChipModal(100, () {
-                selectedQuantity = 100;
-                quantityCtrl.text = '100';
-                onQuantityChanged(100);
-                setStateModal(() {});
-                print('⚡ Quantité rapide: 100');
-              }),
-            ],
-          ),
-        ],
-      ),
+              }
+            }),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: TextField(
+                  controller: quantityCtrl,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: kAppFontFamily,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  onChanged: (value) {
+                    final int? parsed = int.tryParse(value);
+                    if (parsed != null && parsed > 0) {
+                      onQuantityChanged(parsed);
+                    }
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _buildQuantityStepBtn('+', () {
+              final newValue = selectedQuantity + 1;
+              quantityCtrl.text = newValue.toString();
+              onQuantityChanged(newValue);
+              setStateModal(() {});
+            }),
+          ],
+        ),
+        const SizedBox(height: 10),
+        // Pastilles de quantités rapides
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [5, 10, 25, 50, 100].map((q) {
+            return _buildQuickPill(q, () {
+              quantityCtrl.text = q.toString();
+              onQuantityChanged(q);
+              setStateModal(() {});
+            });
+          }).toList(),
+        ),
+      ],
     );
   }
 
-  Widget _buildQuantityButtonModal(String label, VoidCallback onPressed) {
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: K.surface,
-        foregroundColor: K.primary,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        minimumSize: const Size(44, 50),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(K.radiusSm),
-          side: BorderSide(color: K.border),
-        ),
-        elevation: 0,
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuickChipModal(int value, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: K.surface,
-          borderRadius: BorderRadius.circular(K.radiusXs),
-          border: Border.all(color: K.border),
+  Widget _buildQuantityStepBtn(String label, VoidCallback onPressed) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          foregroundColor: const Color(0xFF0F172A),
+          side: const BorderSide(color: Color(0xFFE2E8F0)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
         child: Text(
-          value.toString(),
+          label,
           style: const TextStyle(
-            fontSize: 12,
+            fontFamily: kAppFontFamily,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickPill(int value, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0x10000000)),
+        ),
+        child: Text(
+          '+$value',
+          style: const TextStyle(
+            fontFamily: kAppFontFamily,
+            fontSize: 11.5,
             fontWeight: FontWeight.w600,
-            color: K.primary,
+            color: Color(0xFF334155),
           ),
         ),
       ),
@@ -806,63 +609,64 @@ class _StockSupplyState extends State<StockSupply> with SingleTickerProviderStat
     final isLowStock = newStock < product.seuilAlerte;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: K.surfaceAlt,
-        borderRadius: BorderRadius.circular(K.radiusSm),
-        border: Border.all(color: K.border),
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0x14000000)),
       ),
       child: Column(
         children: [
           Row(
             children: [
               Expanded(
-                child: _buildSummaryItem(
+                child: _buildSummaryMetric(
                   label: 'Stock actuel',
                   value: '$currentStock',
-                  color: currentStock < product.seuilAlerte ? K.warning : K.success,
-                  icon: Icons.inventory_2_rounded,
+                  color: currentStock < product.seuilAlerte
+                      ? const Color(0xFFD97706)
+                      : const Color(0xFF1E293B),
                 ),
               ),
-              const SizedBox(width: 12),
+              const Icon(Icons.arrow_forward_rounded, size: 16, color: Color(0xFF94A3B8)),
               Expanded(
-                child: _buildSummaryItem(
-                  label: 'À ajouter',
+                child: _buildSummaryMetric(
+                  label: 'Entrée prévue',
                   value: '+$selectedQuantity',
-                  color: K.primary,
-                  icon: Icons.add_rounded,
+                  color: const Color(0xFF0067C0),
                 ),
               ),
-              const SizedBox(width: 12),
+              const Icon(Icons.arrow_forward_rounded, size: 16, color: Color(0xFF94A3B8)),
               Expanded(
-                child: _buildSummaryItem(
+                child: _buildSummaryMetric(
                   label: 'Nouveau stock',
                   value: '$newStock',
-                  color: isLowStock ? K.warning : K.success,
-                  icon: Icons.check_circle_rounded,
+                  color: isLowStock
+                      ? const Color(0xFFD97706)
+                      : const Color(0xFF107C41),
                 ),
               ),
             ],
           ),
           if (isLowStock) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: K.warning.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(K.radiusSm),
-                border: Border.all(color: K.warning.withOpacity(0.2)),
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(6),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_rounded, color: K.warning, size: 16),
+                  const Icon(Icons.warning_amber_rounded, color: Color(0xFFB45309), size: 15),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '⚠️ Le stock reste inférieur au seuil d\'alerte (${product.seuilAlerte})',
+                      'Ce volume reste inférieur au seuil minimal requis (${product.seuilAlerte})',
                       style: const TextStyle(
-                        color: K.warning,
-                        fontSize: 12,
+                        fontFamily: kAppFontFamily,
+                        color: Color(0xFFB45309),
+                        fontSize: 11,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -876,40 +680,32 @@ class _StockSupplyState extends State<StockSupply> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildSummaryItem({
+  Widget _buildSummaryMetric({
     required String label,
     required String value,
     required Color color,
-    required IconData icon,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: K.surface,
-        borderRadius: BorderRadius.circular(K.radiusSm),
-        border: Border.all(color: K.border),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: color,
-            ),
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontFamily: kAppFontFamily,
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
+            color: color,
           ),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 10,
-              color: K.textMuted,
-            ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: kAppFontFamily,
+            fontSize: 10.5,
+            color: Color(0xFF64748B),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -920,27 +716,18 @@ class _StockSupplyState extends State<StockSupply> with SingleTickerProviderStat
   }
 
   Future<void> _supplyProduct(Product product, int depotId, int quantity) async {
-    print('📦 Ravitaillement du produit: ${product.nom}');
-    print('🏢 Dépôt ID: $depotId');
-    print('📊 Quantité: $quantity');
-    print('📊 Stock actuel: ${_getCurrentStock(product.id)}');
-
     try {
       final user = Provider.of<AuthProvider>(context, listen: false).user;
       if (user == null) {
-        print('❌ Utilisateur non connecté');
-        _showSnackBar('Utilisateur non connecté', Colors.red);
+        _showSnackBar('Utilisateur non connecté', const Color(0xFFC42B1C));
         return;
       }
 
       final service = AdminService(user.token);
-      print('🔧 Service Admin créé');
 
-      print('🔍 Récupération du stock existant...');
       final existingStock = _stocks.firstWhere(
-        (s) => s.produitId == product.id && s.depotId == depotId,
+            (s) => s.produitId == product.id && s.depotId == depotId,
         orElse: () {
-          print('ℹ️ Aucun stock existant, création d\'un nouveau');
           return Stock(
             id: 0,
             produitId: product.id,
@@ -958,262 +745,358 @@ class _StockSupplyState extends State<StockSupply> with SingleTickerProviderStat
         },
       );
 
-      print('📊 Stock existant: ${existingStock.quantite}');
       final newQuantity = existingStock.quantite + quantity;
-      print('📊 Nouveau stock: $newQuantity');
 
-      print('📤 Envoi de la requête d\'ajustement...');
-      try {
-        final result = await service.ajusterStock(
-          produitId: product.id,
-          depotId: depotId,
-          quantite: newQuantity,
-          quantiteMinimale: existingStock.quantiteMinimale,
-          quantiteMaximale: existingStock.quantiteMaximale,
-        );
-        print('✅ Réponse API reçue');
-        print('📊 Nouveau stock: ${result.quantite}');
-        
-        _showSnackBar(
-          '✅ ${quantity} ${product.unite}(s) de "${product.nom}" ajoutés',
-          Colors.green,
-        );
-        
-        print('🔄 Rafraîchissement des données...');
-        await _refreshData();
-        
-      } on Exception catch (e) {
-        print('❌ Erreur API: $e');
-        rethrow;
-      }
-      
+      await service.ajusterStock(
+        produitId: product.id,
+        depotId: depotId,
+        quantite: newQuantity,
+        quantiteMinimale: existingStock.quantiteMinimale,
+        quantiteMaximale: existingStock.quantiteMaximale,
+      );
+
+      _showSnackBar(
+        '$quantity ${product.unite}(s) de "${product.nom}" approvisionné(s)',
+        const Color(0xFF107C41),
+      );
+
+      await _refreshData();
     } catch (e) {
-      print('❌ Erreur dans _supplyProduct: $e');
-      print('📋 Stack trace: ${StackTrace.current}');
-      _showSnackBar('Erreur: ${e.toString()}', Colors.red);
+      _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
       rethrow;
     }
   }
 
   void _showSnackBar(String message, Color color) {
-    print('📢 SnackBar: $message');
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
             Icon(
-              color == Colors.green ? Icons.check_circle_rounded : 
-              color == Colors.orange ? Icons.warning_rounded : 
-              Icons.error_outline_rounded,
+              color == const Color(0xFF107C41)
+                  ? Icons.check_circle_rounded
+                  : color == const Color(0xFFD97706)
+                  ? Icons.warning_rounded
+                  : Icons.error_outline_rounded,
               color: Colors.white,
-              size: 20,
+              size: 18,
             ),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
           ],
         ),
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         duration: const Duration(seconds: 3),
       ),
     );
   }
 
-  // ---------------------------------------------------------------------
-  // WIDGETS PRINCIPAUX
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // BUILD PRINCIPAL
+  // ---------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 900;
+    final isWide = MediaQuery.of(context).size.width >= 960;
 
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: K.surface,
-        borderRadius: BorderRadius.circular(K.radius),
-        border: Border.all(color: K.border),
-        boxShadow: [K.cardShadow],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: _isLoading
-            ? const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(color: K.primary),
-                    SizedBox(height: 16),
-                    Text(
-                      'Chargement des données...',
-                      style: TextStyle(color: K.textMuted),
+    return Material(
+      color: Colors.transparent,
+      child: _isLoading
+          ? const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFF0067C0),
+          strokeWidth: 2.2,
+        ),
+      )
+          : FadeTransition(
+        opacity: _fadeAnimation,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 1. Indicateurs Synthétiques avec Ondes Fluides
+            _buildSupplyMetricsRow(),
+            const SizedBox(height: 18),
+
+            // 2. Barre d'outils (Sélection Dépôt & Recherche)
+            _buildToolbar(isWide),
+            const SizedBox(height: 14),
+
+            // 3. Tableau de Ravitaillement
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFFFF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0x18000000), width: 1),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x06000000),
+                      blurRadius: 12,
+                      offset: Offset(0, 3),
                     ),
                   ],
                 ),
-              )
-            : FadeTransition(
-                opacity: _fadeAnimation,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeader(),
-                    const SizedBox(height: 20),
-                    _buildDepotSelector(),
-                    const SizedBox(height: 16),
-                    _buildFilters(),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: _filteredProducts.isEmpty
-                          ? _buildEmptyState()
-                          : ListView.separated(
-                              itemCount: _filteredProducts.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final product = _filteredProducts[index];
-                                return _buildProductTile(product);
-                              },
-                            ),
-                    ),
-                  ],
-                ),
+                clipBehavior: Clip.antiAlias,
+                child: _filteredProducts.isEmpty
+                    ? _buildEmptyState()
+                    : isWide
+                    ? _buildDesktopDataTable()
+                    : _buildMobileDataRows(),
               ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildHeader() {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [K.success, K.success.withOpacity(0.7)],
-            ),
-            borderRadius: BorderRadius.circular(K.radiusSm),
-          ),
-          child: const Icon(
-            Icons.local_shipping_rounded,
-            color: Colors.white,
-            size: 28,
-          ),
-        ),
-        const SizedBox(width: 16),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Ravitaillement des stocks',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: K.textPrimary,
-                ),
-              ),
-              Text(
-                'Ajoutez des produits dans les dépôts',
-                style: TextStyle(
-                  color: K.textMuted,
-                  fontSize: 13,
-                ),
-              ),
+  // ---------------------------------------------------------------------------
+  // 1. LES CARTES DE MÉTRIQUES STYLISÉES AVEC ONDES FLUIDES (WINDOWS BLOOM)
+  // ---------------------------------------------------------------------------
+  Widget _buildSupplyMetricsRow() {
+    final totalProducts = _products.length;
+    String activeDepotName = 'Sélectionner';
+    for (final d in _depots) {
+      if (d.id == _selectedDepotId) {
+        activeDepotName = d.nom;
+        break;
+      }
+    }
+    if (activeDepotName == 'Sélectionner' && _depots.isNotEmpty) {
+      activeDepotName = _depots.first.nom;
+    }
+    final lowStockCount = _products.where((p) {
+      final stock = _getCurrentStock(p.id);
+      return stock < p.seuilAlerte;
+    }).length;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 740;
+
+        final cards = [
+          _buildWaveMetricCard(
+            title: "TOTAL CATALOGUE",
+            value: "$totalProducts",
+            subtitle: "Articles référencés",
+            badge: "Catalogue",
+            icon: Icons.inventory_2_outlined,
+            gradient: const [
+              Color(0xFF004E8C),
+              Color(0xFF0067C0),
+              Color(0xFF2886DE),
             ],
+            waveSeed: 1.2,
           ),
-        ),
-        IconButton(
-          onPressed: _refreshData,
-          icon: const Icon(Icons.refresh_rounded, color: K.primary),
-          tooltip: 'Rafraîchir',
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: K.info.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(K.radiusXl),
+          _buildWaveMetricCard(
+            title: "DÉPÔT EN COURS",
+            value: activeDepotName,
+            subtitle: "Site d'affectation actif",
+            badge: "Cible",
+            icon: Icons.warehouse_outlined,
+            gradient: const [
+              Color(0xFF0A3B5C),
+              Color(0xFF165B8C),
+              Color(0xFF3A89C9),
+            ],
+            waveSeed: 2.4,
           ),
-          child: Text(
-            '${_filteredProducts.length} produit${_filteredProducts.length > 1 ? 's' : ''}',
-            style: const TextStyle(
-              color: K.info,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
+          _buildWaveMetricCard(
+            title: "SOUS LE SEUIL",
+            value: "$lowStockCount",
+            subtitle: "Articles à réapprovisionner",
+            badge: "Surveillance",
+            icon: Icons.notifications_active_outlined,
+            gradient: const [
+              Color(0xFF1E293B),
+              Color(0xFF334155),
+              Color(0xFF475569),
+            ],
+            waveSeed: 3.6,
           ),
-        ),
-      ],
+        ];
+
+        if (isNarrow) {
+          return Column(
+            children: [
+              cards[0],
+              const SizedBox(height: 12),
+              cards[1],
+              const SizedBox(height: 12),
+              cards[2],
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: cards[0]),
+            const SizedBox(width: 14),
+            Expanded(child: cards[1]),
+            const SizedBox(width: 14),
+            Expanded(child: cards[2]),
+          ],
+        );
+      },
     );
   }
 
-  Widget _buildDepotSelector() {
+  Widget _buildWaveMetricCard({
+    required String title,
+    required String value,
+    required String subtitle,
+    required String badge,
+    required IconData icon,
+    required List<Color> gradient,
+    required double waveSeed,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: K.surfaceAlt,
-        borderRadius: BorderRadius.circular(K.radiusSm),
-        border: Border.all(color: K.border),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.warehouse_rounded, color: K.primary),
-          const SizedBox(width: 12),
-          const Text(
-            'Dépôt :',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: K.textPrimary,
-            ),
+        color: const Color(0xFFFFFFFF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0x18000000), width: 1),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 10,
+            offset: Offset(0, 3),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: DropdownButton<int>(
-              value: _selectedDepotId,
-              isExpanded: true,
-              underline: Container(),
-              dropdownColor: K.surface,
-              items: _depots.map((depot) {
-                return DropdownMenuItem(
-                  value: depot.id,
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Bannière supérieure fluide
+          SizedBox(
+            height: 64,
+            child: Stack(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: gradient,
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: SupplyMetricWavePainter(waveSeed: waveSeed),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Icon(
-                        depot.estMagasin ? Icons.store_rounded : Icons.warehouse_rounded,
-                        color: K.primary,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        depot.nom,
-                        style: const TextStyle(color: K.textPrimary),
-                      ),
-                      const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: K.info.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(K.radiusXl),
+                          color: Colors.white.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(icon, color: Colors.white, size: 16),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.25),
+                          borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          depot.estMagasin ? 'Magasin' : 'Entrepôt',
+                          badge,
                           style: const TextStyle(
-                            fontSize: 9,
-                            color: K.info,
-                            fontWeight: FontWeight.w600,
+                            fontFamily: kAppFontFamily,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 0.3,
                           ),
                         ),
                       ),
                     ],
                   ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                print('🔄 Changement de dépôt: $value');
-                setState(() {
-                  _selectedDepotId = value;
-                });
-              },
+                ),
+              ],
+            ),
+          ),
+
+          // Pied de carte blanc
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontFamily: kAppFontFamily,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF64748B),
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              value,
+                              style: const TextStyle(
+                                fontFamily: kAppFontFamily,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0F172A),
+                                letterSpacing: -0.4,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              subtitle,
+                              style: const TextStyle(
+                                fontFamily: kAppFontFamily,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w400,
+                                color: Color(0xFF94A3B8),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.more_horiz_rounded,
+                  size: 16,
+                  color: Color(0xFFCBD5E1),
+                ),
+              ],
             ),
           ),
         ],
@@ -1221,185 +1104,345 @@ class _StockSupplyState extends State<StockSupply> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildFilters() {
+  // ---------------------------------------------------------------------------
+  // 2. BARRE D'OUTILS
+  // ---------------------------------------------------------------------------
+  Widget _buildToolbar(bool isWide) {
     return Row(
       children: [
-        Expanded(
-          child: TextField(
-            controller: _searchCtrl,
-            onChanged: (_) => _filterProducts(),
-            decoration: InputDecoration(
-              hintText: 'Rechercher un produit...',
-              hintStyle: const TextStyle(color: K.textMuted, fontSize: 13),
-              prefixIcon: const Icon(Icons.search_rounded, color: K.textMuted, size: 20),
-              filled: true,
-              fillColor: K.surfaceAlt,
-              contentPadding: const EdgeInsets.symmetric(vertical: 0),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(K.radiusSm),
-                borderSide: BorderSide.none,
-              ),
-              suffixIcon: _searchCtrl.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear_rounded, color: K.textMuted, size: 18),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        _filterProducts();
-                      },
-                    )
-                  : null,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
+        // Sélecteur de Dépôt Cible
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: K.info.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(K.radiusXl),
+            color: const Color(0xFFFFFFFF),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0x18000000), width: 1),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.production_quantity_limits_rounded, color: K.info, size: 16),
-              const SizedBox(width: 6),
-              Text(
-                '${_filteredProducts.length}',
-                style: const TextStyle(
-                  color: K.info,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+              const Icon(Icons.warehouse_outlined, size: 17, color: Color(0xFF0067C0)),
+              const SizedBox(width: 8),
+              DropdownButton<int>(
+                value: _selectedDepotId,
+                underline: const SizedBox(),
+                dropdownColor: const Color(0xFFFFFFFF),
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B), size: 18),
+                items: _depots.map((depot) {
+                  return DropdownMenuItem(
+                    value: depot.id,
+                    child: Text(
+                      depot.nom,
+                      style: const TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() => _selectedDepotId = value);
+                },
               ),
             ],
+          ),
+        ),
+
+        const SizedBox(width: 12),
+
+        // Recherche d'article
+        Expanded(
+          flex: isWide ? 0 : 1,
+          child: SizedBox(
+            width: isWide ? 280 : null,
+            height: 38,
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (_) => _filterProducts(),
+              style: const TextStyle(
+                fontFamily: kAppFontFamily,
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: Color(0xFF1F1F1F),
+              ),
+              decoration: InputDecoration(
+                hintText: 'Rechercher un article...',
+                hintStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  color: Color(0xFF9CA3AF),
+                  fontSize: 12.5,
+                ),
+                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF6B7280), size: 18),
+                suffixIcon: _searchCtrl.text.isNotEmpty
+                    ? IconButton(
+                  splashRadius: 14,
+                  icon: const Icon(Icons.clear_rounded, size: 15, color: Color(0xFF6B7280)),
+                  onPressed: () {
+                    _searchCtrl.clear();
+                    _filterProducts();
+                  },
+                )
+                    : null,
+                filled: true,
+                fillColor: const Color(0xFFFFFFFF),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0x18000000), width: 1),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0x18000000), width: 1),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.5),
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        if (isWide) ...[
+          const SizedBox(width: 14),
+          Text(
+            "${_filteredProducts.length} article(s)",
+            style: const TextStyle(
+              fontFamily: kAppFontFamily,
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+              color: Color(0xFF64748B),
+            ),
+          ),
+        ],
+
+        const Spacer(),
+
+        // Bouton Rafraîchir
+        SizedBox(
+          height: 38,
+          child: OutlinedButton.icon(
+            onPressed: _refreshData,
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Actualiser'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF0F172A),
+              side: const BorderSide(color: Color(0x20000000)),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              textStyle: const TextStyle(
+                fontFamily: kAppFontFamily,
+                fontWeight: FontWeight.w600,
+                fontSize: 12.5,
+              ),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildProductTile(Product product) {
-    final currentStock = _getCurrentStock(product.id);
-    final isLowStock = currentStock < product.seuilAlerte;
-
-    print('📊 Produit: ${product.nom} - Stock: $currentStock - Seuil: ${product.seuilAlerte}');
-
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(K.radiusSm),
-        side: BorderSide(
-          color: currentStock == 0
-              ? K.danger.withOpacity(0.2)
-              : isLowStock
-                  ? K.warning.withOpacity(0.3)
-                  : K.border,
-          width: currentStock == 0 ? 1.5 : 1,
-        ),
-      ),
-      child: InkWell(
-        onTap: () {
-          print('👆 Clic sur produit: ${product.nom} (ID: ${product.id})');
-          _showSupplyModal(product);
-        },
-        borderRadius: BorderRadius.circular(K.radiusSm),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: K.accentSoft,
-                  borderRadius: BorderRadius.circular(K.radiusSm),
-                ),
-                child: Center(
-                  child: Text(
-                    product.code.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(
-                      color: K.primary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      product.nom,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: K.textPrimary,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        _buildInfoChip(product.code, K.primary),
-                        const SizedBox(width: 4),
-                        _buildInfoChip(product.unite, K.info),
-                        const SizedBox(width: 4),
-                        _buildStockStatusChip(currentStock, product.seuilAlerte),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '\$${product.prixVente.toStringAsFixed(0)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: K.success,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      print('🔘 Bouton Ravitailler: ${product.nom}');
-                      _showSupplyModal(product);
-                    },
-                    icon: const Icon(Icons.add_rounded, size: 16),
-                    label: const Text('Ravitaillement'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: K.success,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(K.radiusXs),
-                      ),
-                      minimumSize: const Size(100, 36),
-                    ),
-                  ),
+  // ---------------------------------------------------------------------------
+  // 3. TABLEAU DE DONNÉES DESKTOP
+  // ---------------------------------------------------------------------------
+  Widget _buildDesktopDataTable() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.vertical,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                headingRowHeight: 42,
+                dataRowMinHeight: 48,
+                dataRowMaxHeight: 48,
+                horizontalMargin: 20,
+                columnSpacing: 26,
+                dividerThickness: 1,
+                columns: const [
+                  DataColumn(label: Text("CODE", style: _headerStyle)),
+                  DataColumn(label: Text("DÉSIGNATION", style: _headerStyle)),
+                  DataColumn(label: Text("UNITÉ", style: _headerStyle)),
+                  DataColumn(label: Text("STOCK EN DÉPÔT", style: _headerStyle)),
+                  DataColumn(label: Text("SEUIL MINIMAL", style: _headerStyle)),
+                  DataColumn(label: Text("PRIX VENTE", style: _headerStyle)),
+                  DataColumn(label: Text("ACTION", style: _headerStyle)),
                 ],
+                rows: _filteredProducts.map((product) {
+                  final currentStock = _getCurrentStock(product.id);
+                  final isLowStock = currentStock < product.seuilAlerte;
+
+                  return DataRow(
+                    cells: [
+                      // Code Article
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0x10000000)),
+                          ),
+                          child: Text(
+                            product.code,
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1E293B),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Nom
+                      DataCell(
+                        Text(
+                          product.nom,
+                          style: const TextStyle(
+                            fontFamily: kAppFontFamily,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F172A),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+
+                      // Unité
+                      DataCell(
+                        Text(
+                          product.unite,
+                          style: const TextStyle(
+                            fontFamily: kAppFontFamily,
+                            color: Color(0xFF64748B),
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ),
+
+                      // Stock en Dépôt + Statut
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '$currentStock',
+                              style: TextStyle(
+                                fontFamily: kAppFontFamily,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13.5,
+                                color: currentStock == 0
+                                    ? const Color(0xFFC42B1C)
+                                    : isLowStock
+                                    ? const Color(0xFFD97706)
+                                    : const Color(0xFF107C41),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildStockStatusBadge(currentStock, product.seuilAlerte),
+                          ],
+                        ),
+                      ),
+
+                      // Seuil
+                      DataCell(
+                        Text(
+                          '${product.seuilAlerte}',
+                          style: const TextStyle(
+                            fontFamily: kAppFontFamily,
+                            color: Color(0xFF64748B),
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ),
+
+                      // Prix Vente
+                      DataCell(
+                        Text(
+                          '${product.prixVente.toStringAsFixed(2)} \$',
+                          style: const TextStyle(
+                            fontFamily: kAppFontFamily,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0067C0),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+
+                      // Bouton Ravitailler
+                      DataCell(
+                        ElevatedButton.icon(
+                          onPressed: () => _showSupplyModal(product),
+                          icon: const Icon(Icons.add_rounded, size: 15),
+                          label: const Text('Ravitailler'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0067C0),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            textStyle: const TextStyle(
+                              fontFamily: kAppFontFamily,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildInfoChip(String label, Color color) {
+  static const TextStyle _headerStyle = TextStyle(
+    fontFamily: kAppFontFamily,
+    fontSize: 10.5,
+    fontWeight: FontWeight.w700,
+    color: Color(0xFF64748B),
+    letterSpacing: 0.6,
+  );
+
+  Widget _buildStockStatusBadge(int currentStock, int seuil) {
+    Color color;
+    Color bgColor;
+    String label;
+
+    if (currentStock == 0) {
+      color = const Color(0xFFC42B1C);
+      bgColor = const Color(0xFFFDE8E8);
+      label = 'Rupture';
+    } else if (currentStock < seuil) {
+      color = const Color(0xFFB45309);
+      bgColor = const Color(0xFFFEF3C7);
+      label = 'Stock bas';
+    } else {
+      color = const Color(0xFF107C41);
+      bgColor = const Color(0xFFE6F4EA);
+      label = 'Normal';
+    }
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(K.radiusXl),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         label,
         style: TextStyle(
+          fontFamily: kAppFontFamily,
           color: color,
           fontSize: 10,
           fontWeight: FontWeight.w600,
@@ -1408,86 +1451,188 @@ class _StockSupplyState extends State<StockSupply> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildStockStatusChip(int currentStock, int seuil) {
-    Color color;
-    String label;
+  // ---------------------------------------------------------------------------
+  // 4. LIGNES MOBILE
+  // ---------------------------------------------------------------------------
+  Widget _buildMobileDataRows() {
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: _filteredProducts.length,
+      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0x12000000)),
+      itemBuilder: (context, index) {
+        final product = _filteredProducts[index];
+        final currentStock = _getCurrentStock(product.id);
 
-    if (currentStock == 0) {
-      color = K.danger;
-      label = 'Rupture';
-    } else if (currentStock < seuil) {
-      color = K.warning;
-      label = 'Stock bas';
-    } else {
-      color = K.success;
-      label = 'Stock OK';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(K.radiusXl),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 5,
-            height: 5,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.nom,
+                      style: const TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.5,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${product.code} • Stock: $currentStock ${product.unite}',
+                      style: const TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontSize: 11.5,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => _showSupplyModal(product),
+                icon: const Icon(Icons.add_rounded, size: 15),
+                label: const Text('Ravitailler'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0067C0),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // ÉTAT VIDE
+  // ---------------------------------------------------------------------------
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            _searchCtrl.text.isEmpty ? Icons.inventory_2_rounded : Icons.search_off_rounded,
-            size: 64,
-            color: K.textMuted,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _searchCtrl.text.isEmpty ? 'Aucun produit disponible' : 'Aucun résultat trouvé',
-            style: const TextStyle(color: K.textMuted, fontSize: 16),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _searchCtrl.text.isEmpty 
-                ? 'Ajoutez des produits pour les ravitailler' 
-                : 'Essayez un autre terme de recherche',
-            style: const TextStyle(color: K.textMuted, fontSize: 13),
-          ),
-          if (_searchCtrl.text.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: () {
-                _searchCtrl.clear();
-                _filterProducts();
-              },
-              child: const Text('Effacer la recherche'),
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF1F5F9),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.inventory_2_outlined, size: 32, color: Color(0xFF94A3B8)),
             ),
+            const SizedBox(height: 14),
+            Text(
+              _searchCtrl.text.isEmpty
+                  ? 'Aucun article disponible pour ravitaillement'
+                  : 'Aucun résultat correspondant',
+              style: const TextStyle(
+                fontFamily: kAppFontFamily,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _searchCtrl.text.isEmpty
+                  ? 'Créez d\'abord des produits dans le catalogue.'
+                  : 'Modifiez vos termes de recherche.',
+              style: const TextStyle(
+                fontFamily: kAppFontFamily,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w400,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            if (_searchCtrl.text.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              OutlinedButton(
+                onPressed: () {
+                  _searchCtrl.clear();
+                  _filterProducts();
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF0067C0),
+                  side: const BorderSide(color: Color(0xFF0067C0)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+                child: const Text('Effacer la recherche'),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// PAINTER VECTORIEL : ONDES FLUIDES DES CARTES DE RAVITAILLEMENT
+// ---------------------------------------------------------------------------
+class SupplyMetricWavePainter extends CustomPainter {
+  final double waveSeed;
+
+  SupplyMetricWavePainter({required this.waveSeed});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final strokePaint = Paint()
+      ..color = Colors.white.withOpacity(0.22)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.white.withOpacity(0.20),
+          Colors.white.withOpacity(0.02),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..style = PaintingStyle.fill;
+
+    final path = Path();
+    path.moveTo(0, size.height * 0.85);
+
+    path.cubicTo(
+      size.width * 0.28,
+      size.height * (0.35 + 0.12 * math.sin(waveSeed)),
+      size.width * 0.60,
+      size.height * (0.95 - 0.12 * math.cos(waveSeed)),
+      size.width,
+      size.height * 0.40,
+    );
+
+    path.lineTo(size.width, size.height);
+    path.lineTo(0, size.height);
+    path.close();
+
+    canvas.drawPath(path, fillPaint);
+
+    final ridgePath = Path();
+    ridgePath.moveTo(0, size.height * 0.85);
+    ridgePath.cubicTo(
+      size.width * 0.28,
+      size.height * (0.35 + 0.12 * math.sin(waveSeed)),
+      size.width * 0.60,
+      size.height * (0.95 - 0.12 * math.cos(waveSeed)),
+      size.width,
+      size.height * 0.40,
+    );
+    canvas.drawPath(ridgePath, strokePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant SupplyMetricWavePainter oldDelegate) =>
+      oldDelegate.waveSeed != waveSeed;
 }

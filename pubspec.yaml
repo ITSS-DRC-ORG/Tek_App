@@ -15,7 +15,6 @@ dependencies:
 
   # Icônes par défaut
   cupertino_icons: ^1.0.8
-
   # --- AJOUTS POUR TEK'APP ---
   
   # Pour appeler tes endpoints API MySQL
@@ -28,7 +27,7 @@ dependencies:
   intl: ^0.19.0
 
   # Pour gérer la taille et la position de la fenêtre sur Windows/Desktop
-  window_manager: ^0.3.7
+  window_manager: ^0.5.2
 
   # (Optionnel) Pour un design plus moderne
   google_fonts: ^6.2.1
@@ -46,10 +45,17 @@ dev_dependencies:
   # Lints pour garder un code propre
   flutter_lints: ^3.0.0
 
+
 flutter:
   # Utilisation du Material Design 3
   uses-material-design: true
 
-  # Section assets (à décommenter si tu as un logo)
-  assets:
-    - assets/fonts/Roboto-Regular.ttf
+  fonts:
+    - family: Google Sans
+      fonts:
+        - asset: assets/fonts/GoogleSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/GoogleSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/GoogleSans-Bold.ttf
+          weight: 700

@@ -1,6 +1,9 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tek_app/models/user_model.dart';
+import 'package:tek_app/models/transfert_model.dart';
+import 'package:tek_app/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../api/admin_service.dart';
 import '../../models/depot_model.dart';
@@ -14,7 +17,8 @@ class StockTransfers extends StatefulWidget {
   State<StockTransfers> createState() => _StockTransfersState();
 }
 
-class _StockTransfersState extends State<StockTransfers> with SingleTickerProviderStateMixin {
+class _StockTransfersState extends State<StockTransfers>
+    with SingleTickerProviderStateMixin {
   // Données
   List<Transfert> _transferts = [];
   List<Depot> _depots = [];
@@ -37,7 +41,7 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 240),
       vsync: this,
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -53,20 +57,18 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
     super.dispose();
   }
 
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // LOAD DATA
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   Future<void> _loadData() async {
-    print('📦 Chargement des transferts...');
     setState(() => _isLoading = true);
     try {
       final user = Provider.of<AuthProvider>(context, listen: false).user;
       if (user != null) {
         final service = AdminService(user.token);
-        
-        // ✅ Vérifier si l'utilisateur est admin
+
         _isAdmin = user.role == UserRole.admin;
-        
+
         final depots = await service.getDepots();
         final products = await service.getAllProducts();
         final stocks = await service.getStocks();
@@ -84,7 +86,7 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      _showSnackBar('Erreur: ${e.toString()}', Colors.red);
+      _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
     }
   }
 
@@ -92,25 +94,24 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
     await _loadData();
   }
 
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // VALIDATION TRANSFERT (Réservée aux admins)
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   Future<void> _validerTransfert(Transfert transfert) async {
-    // ✅ Vérifier si l'utilisateur est admin
     if (!_isAdmin) {
       _showPermissionErrorDialog(
         'Action non autorisée',
-        'Seuls les administrateurs peuvent valider les transferts.\n\nVous n\'avez pas les droits nécessaires pour effectuer cette action.',
-        Icons.lock_rounded,
+        'Seuls les administrateurs peuvent valider les transferts inter-dépôts.\n\nVotre compte ne dispose pas des privilèges suffisants.',
+        Icons.lock_outline_rounded,
       );
       return;
     }
 
     final confirm = await _showConfirmDialog(
       'Valider le transfert',
-      'Êtes-vous sûr de vouloir valider ce transfert ?',
-      'Valider',
-      K.success,
+      'Confirmez-vous la validation de l\'ordre de transfert n° ${transfert.numeroBon} ?',
+      'Valider l\'ordre',
+      const Color(0xFF0067C0),
     );
     if (!confirm) return;
 
@@ -122,37 +123,36 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
 
       final service = AdminService(user.token);
       await service.validerTransfert(transfert.id);
-      _showSnackBar('✅ Transfert #${transfert.numeroBon} validé avec succès', Colors.green);
+      _showSnackBar('Transfert #${transfert.numeroBon} validé avec succès', const Color(0xFF107C41));
       _refreshData();
     } on PermissionException catch (e) {
       _showPermissionErrorDialog(
         'Action non autorisée',
         '${e.message}\n\nSeuls les administrateurs peuvent valider les transferts.',
-        Icons.lock_rounded,
+        Icons.lock_outline_rounded,
       );
     } catch (e) {
-      _showSnackBar('❌ Erreur: ${e.toString()}', Colors.red);
+      _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
     } finally {
       setState(() => _isSubmitting = false);
     }
   }
 
   Future<void> _effectuerTransfert(Transfert transfert) async {
-    // ✅ Vérifier si l'utilisateur est admin
     if (!_isAdmin) {
       _showPermissionErrorDialog(
         'Action non autorisée',
-        'Seuls les administrateurs peuvent effectuer les transferts.\n\nVous n\'avez pas les droits nécessaires pour effectuer cette action.',
-        Icons.lock_rounded,
+        'Seuls les administrateurs peuvent exécuter les transferts.\n\nVotre compte ne dispose pas des privilèges suffisants.',
+        Icons.lock_outline_rounded,
       );
       return;
     }
 
     final confirm = await _showConfirmDialog(
       'Effectuer le transfert',
-      'Êtes-vous sûr de vouloir effectuer ce transfert ?\nLes stocks seront déduits du dépôt source.',
-      'Effectuer',
-      K.success,
+      'Confirmez-vous l\'exécution du transfert n° ${transfert.numeroBon} ?\nLes articles seront immédiatement débités du dépôt source et crédités au dépôt cible.',
+      'Exécuter le mouvement',
+      const Color(0xFF107C41),
     );
     if (!confirm) return;
 
@@ -164,37 +164,36 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
 
       final service = AdminService(user.token);
       await service.effectuerTransfert(transfert.id);
-      _showSnackBar('✅ Transfert #${transfert.numeroBon} effectué avec succès', Colors.green);
+      _showSnackBar('Transfert #${transfert.numeroBon} exécuté avec succès', const Color(0xFF107C41));
       _refreshData();
     } on PermissionException catch (e) {
       _showPermissionErrorDialog(
         'Action non autorisée',
         '${e.message}\n\nSeuls les administrateurs peuvent effectuer les transferts.',
-        Icons.lock_rounded,
+        Icons.lock_outline_rounded,
       );
     } catch (e) {
-      _showSnackBar('❌ Erreur: ${e.toString()}', Colors.red);
+      _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
     } finally {
       setState(() => _isSubmitting = false);
     }
   }
 
   Future<void> _annulerTransfert(Transfert transfert) async {
-    // ✅ Vérifier si l'utilisateur est admin
     if (!_isAdmin) {
       _showPermissionErrorDialog(
         'Action non autorisée',
-        'Seuls les administrateurs peuvent annuler les transferts.\n\nVous n\'avez pas les droits nécessaires pour effectuer cette action.',
-        Icons.lock_rounded,
+        'Seuls les administrateurs peuvent annuler les transferts.',
+        Icons.lock_outline_rounded,
       );
       return;
     }
 
     final confirm = await _showConfirmDialog(
       'Annuler le transfert',
-      'Êtes-vous sûr de vouloir annuler ce transfert ?',
-      'Annuler',
-      K.danger,
+      'Voulez-vous vraiment annuler le bon de transfert n° ${transfert.numeroBon} ?',
+      'Annuler le bon',
+      const Color(0xFFC42B1C),
     );
     if (!confirm) return;
 
@@ -206,53 +205,53 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
 
       final service = AdminService(user.token);
       await service.annulerTransfert(transfert.id);
-      _showSnackBar('✅ Transfert #${transfert.numeroBon} annulé avec succès', Colors.orange);
+      _showSnackBar('Transfert #${transfert.numeroBon} annulé', const Color(0xFFD97706));
       _refreshData();
     } on PermissionException catch (e) {
       _showPermissionErrorDialog(
         'Action non autorisée',
         '${e.message}\n\nSeuls les administrateurs peuvent annuler les transferts.',
-        Icons.lock_rounded,
+        Icons.lock_outline_rounded,
       );
     } catch (e) {
-      _showSnackBar('❌ Erreur: ${e.toString()}', Colors.red);
+      _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
     } finally {
       setState(() => _isSubmitting = false);
     }
   }
 
-  // ---------------------------------------------------------------------
-  // DIALOG PERMISSION
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // DIALOG PERMISSION WINDOWS 11
+  // ---------------------------------------------------------------------------
   void _showPermissionErrorDialog(String title, String message, IconData icon) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(K.radiusXl),
-        ),
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFFFFFFFF),
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        titlePadding: const EdgeInsets.fromLTRB(22, 20, 22, 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 22),
+        actionsPadding: const EdgeInsets.fromLTRB(22, 12, 22, 18),
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
-                color: K.warning.withOpacity(0.1),
-                shape: BoxShape.circle,
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(6),
               ),
-              child: Icon(
-                icon,
-                color: K.warning,
-                size: 28,
-              ),
+              child: Icon(icon, color: const Color(0xFFB45309), size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: K.textPrimary,
+                  fontFamily: kAppFontFamily,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0F172A),
                 ),
               ),
             ),
@@ -265,33 +264,31 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
             Text(
               message,
               style: const TextStyle(
-                fontSize: 14,
-                color: K.textPrimary,
-                height: 1.5,
+                fontFamily: kAppFontFamily,
+                fontSize: 13,
+                color: Color(0xFF475569),
+                height: 1.45,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: K.warning.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(K.radiusSm),
-                border: Border.all(color: K.warning.withOpacity(0.2)),
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0x14000000)),
               ),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon(
-                    Icons.info_outline_rounded,
-                    color: K.warning,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(
+                  Icon(Icons.info_outline_rounded, color: Color(0xFF64748B), size: 16),
+                  SizedBox(width: 8),
+                  Expanded(
                     child: Text(
-                      'Contactez un administrateur pour obtenir les droits nécessaires.',
+                      'Contactez votre direction pour étendre vos permissions de compte.',
                       style: TextStyle(
-                        fontSize: 12,
-                        color: K.warning,
+                        fontFamily: kAppFontFamily,
+                        fontSize: 11.5,
+                        color: Color(0xFF64748B),
                       ),
                     ),
                   ),
@@ -301,130 +298,169 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Fermer', style: TextStyle(color: K.textMuted)),
-          ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             style: ElevatedButton.styleFrom(
-              backgroundColor: K.primary,
+              backgroundColor: const Color(0xFF0067C0),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(K.radiusSm),
-              ),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text('Compris'),
+            child: const Text(
+              'Compris',
+              style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
     );
   }
 
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // FILTRES
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   void _filterTransferts(String filter) {
     setState(() {
       _selectedFilter = filter;
       if (filter == 'Tous') {
         _filteredTransferts = _transferts;
       } else {
-        _filteredTransferts = _transferts.where((t) => t.statut == filter).toList();
+        _filteredTransferts =
+            _transferts.where((t) => t.statut == filter).toList();
       }
     });
   }
 
-  // ---------------------------------------------------------------------
-  // SHOW SNACKBAR
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // SNACKBAR
+  // ---------------------------------------------------------------------------
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
             Icon(
-              color == Colors.green ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+              color == const Color(0xFF107C41)
+                  ? Icons.check_circle_rounded
+                  : Icons.error_outline_rounded,
               color: Colors.white,
-              size: 20,
+              size: 18,
             ),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
           ],
         ),
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         duration: const Duration(seconds: 3),
       ),
     );
   }
 
-  // ---------------------------------------------------------------------
-  // SHOW CONFIRM DIALOG
-  // ---------------------------------------------------------------------
-  Future<bool> _showConfirmDialog(String title, String message, String action, Color color) async {
+  // ---------------------------------------------------------------------------
+  // CONFIRM DIALOG WINDOWS 11
+  // ---------------------------------------------------------------------------
+  Future<bool> _showConfirmDialog(
+      String title, String message, String action, Color color) async {
     return await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(K.radiusXl)),
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFFFFFFFF),
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        titlePadding: const EdgeInsets.fromLTRB(22, 20, 22, 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 22),
+        actionsPadding: const EdgeInsets.fromLTRB(22, 12, 22, 18),
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
                 color: color.withOpacity(0.1),
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(6),
               ),
-              child: Icon(
-                title.contains('Valider') ? Icons.check_circle_rounded :
-                title.contains('Effectuer') ? Icons.play_arrow_rounded :
-                Icons.warning_rounded,
-                color: color,
-                size: 24,
-              ),
+              child: Icon(Icons.swap_horiz_rounded, color: color, size: 20),
             ),
             const SizedBox(width: 12),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              title,
+              style: const TextStyle(
+                fontFamily: kAppFontFamily,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
+              ),
+            ),
           ],
         ),
-        content: Text(message, style: const TextStyle(height: 1.5)),
+        content: Text(
+          message,
+          style: const TextStyle(
+            fontFamily: kAppFontFamily,
+            fontSize: 13,
+            color: Color(0xFF475569),
+            height: 1.45,
+          ),
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Annuler', style: TextStyle(color: K.textMuted)),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text(
+              'Annuler',
+              style: TextStyle(
+                fontFamily: kAppFontFamily,
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: color,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(K.radiusSm),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: Text(
+              action,
+              style: const TextStyle(
+                fontFamily: kAppFontFamily,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            child: Text(action),
           ),
         ],
       ),
-    ) ?? false;
+    ) ??
+        false;
   }
 
-  // ---------------------------------------------------------------------
-  // CRÉER TRANSFERT
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // CRÉER TRANSFERT (Modale Windows 11 Fluent)
+  // ---------------------------------------------------------------------------
   void _showCreateTransferDialog() {
-    // ✅ Vérifier si l'utilisateur peut créer un transfert
     if (!_isAdmin) {
       _showPermissionErrorDialog(
         'Action non autorisée',
-        'Seuls les administrateurs peuvent créer des transferts.\n\nVous n\'avez pas les droits nécessaires pour effectuer cette action.',
-        Icons.lock_rounded,
+        'Seuls les administrateurs peuvent initier des transferts de stock.\n\nVotre compte ne dispose pas des privilèges nécessaires.',
+        Icons.lock_outline_rounded,
       );
       return;
     }
 
-    // ... reste du code de création de transfert inchangé
     final List<TransfertLigne> lignes = [];
     int? selectedDepotSource;
     int? selectedDepotDestination;
@@ -436,232 +472,237 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
+      builder: (dialogContext) => StatefulBuilder(
         builder: (context, setStateModal) {
           return Dialog(
             elevation: 0,
             backgroundColor: Colors.transparent,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             child: Container(
-              width: MediaQuery.of(context).size.width >= 700 ? 700 : double.infinity,
+              width: 680,
               constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.85,
-                maxWidth: 700,
+                maxHeight: MediaQuery.of(context).size.height * 0.88,
+                maxWidth: 680,
               ),
               decoration: BoxDecoration(
-                color: K.surface,
-                borderRadius: BorderRadius.circular(K.radiusXl),
-                border: Border.all(color: K.border, width: 1),
-                boxShadow: [
+                color: const Color(0xFFFFFFFF),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0x18000000), width: 1),
+                boxShadow: const [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 30,
-                    spreadRadius: 5,
-                    offset: const Offset(0, 10),
+                    color: Color(0x18000000),
+                    blurRadius: 28,
+                    offset: Offset(0, 8),
                   ),
                 ],
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(K.radiusXl),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header
-                    Container(
-                      padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [K.primary, K.primary.withOpacity(0.8)],
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // En-tête Fluent sobre
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 18, 16, 16),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F2FB),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.swap_horiz_rounded,
+                            color: Color(0xFF0067C0),
+                            size: 20,
+                          ),
                         ),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(K.radiusSm),
-                            ),
-                            child: const Icon(
-                              Icons.swap_horiz_rounded,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Nouveau Transfert',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                Text(
-                                  'Transférer des produits entre dépôts',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.1),
-                              shape: BoxShape.circle,
-                            ),
-                            child: IconButton(
-                              icon: const Icon(Icons.close_rounded, color: Colors.white),
-                              onPressed: isSubmitting ? null : () => Navigator.pop(context),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Contenu
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
+                        const SizedBox(width: 12),
+                        const Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildDepotSelectorModal(
-                              'Dépôt source',
-                              'Veuillez sélectionner le dépôt source',
-                              selectedDepotSource,
-                              _depots,
-                              (value) => setStateModal(() => selectedDepotSource = value),
+                            Text(
+                              'Nouveau Bon de Transfert',
+                              style: TextStyle(
+                                fontFamily: kAppFontFamily,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0F172A),
+                              ),
                             ),
-                            const SizedBox(height: 16),
-
-                            _buildDepotSelectorModal(
-                              'Dépôt destination',
-                              'Veuillez sélectionner le dépôt de destination',
-                              selectedDepotDestination,
-                              _depots.where((d) => d.id != selectedDepotSource).toList(),
-                              (value) => setStateModal(() => selectedDepotDestination = value),
+                            SizedBox(height: 2),
+                            Text(
+                              'Planifiez un mouvement d\'articles entre deux sites',
+                              style: TextStyle(
+                                fontFamily: kAppFontFamily,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                                color: Color(0xFF64748B),
+                              ),
                             ),
-                            const SizedBox(height: 16),
-
-                            _buildMotifSelector(
-                              motifCtrl,
-                              selectedMotif,
-                              (value) => setStateModal(() {
-                                selectedMotif = value;
-                                motifCtrl.text = value;
-                              }),
-                            ),
-                            const SizedBox(height: 16),
-
-                            _buildLignesTransfert(
-                              lignes,
-                              selectedDepotSource,
-                              _products,
-                              _stocks,
-                              setStateModal,
-                            ),
-                            const SizedBox(height: 16),
-
-                            if (lignes.isNotEmpty)
-                              _buildTransfertResume(lignes, _products),
                           ],
                         ),
-                      ),
-                    ),
-
-                    // Footer
-                    Container(
-                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: K.border, width: 1),
+                        const Spacer(),
+                        IconButton(
+                          splashRadius: 16,
+                          icon: const Icon(Icons.close_rounded, size: 19),
+                          color: const Color(0xFF64748B),
+                          onPressed: isSubmitting ? null : () => Navigator.pop(dialogContext),
                         ),
-                      ),
-                      child: Row(
+                      ],
+                    ),
+                  ),
+
+                  const Divider(height: 1, thickness: 1, color: Color(0x14000000)),
+
+                  // Contenu Formulaire
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(22),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: isSubmitting ? null : () => Navigator.pop(context),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                side: const BorderSide(color: K.border),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(K.radiusSm),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildDepotSelectorModal(
+                                  'DÉPÔT SOURCE (DÉBIT)',
+                                  'Sélectionner la source',
+                                  selectedDepotSource,
+                                  _depots,
+                                      (value) => setStateModal(() => selectedDepotSource = value),
                                 ),
                               ),
-                              child: const Text('Annuler', style: TextStyle(color: K.textMuted)),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            flex: 2,
-                            child: ElevatedButton(
-                              onPressed: isSubmitting || lignes.isEmpty || selectedDepotSource == null || selectedDepotDestination == null
-                                  ? null
-                                  : () async {
-                                      setStateModal(() => isSubmitting = true);
-                                      try {
-                                        final user = Provider.of<AuthProvider>(context, listen: false).user;
-                                        if (user == null) return;
-
-                                        final service = AdminService(user.token);
-                                        final transfert = await service.createTransfert(
-                                          depotSourceId: selectedDepotSource!,
-                                          depotDestinationId: selectedDepotDestination!,
-                                          motif: motifCtrl.text.isNotEmpty ? motifCtrl.text : selectedMotif,
-                                          lignes: lignes,
-                                        );
-
-                                        _showSnackBar('Transfert #${transfert.numeroBon} créé avec succès', Colors.green);
-                                        Navigator.pop(context);
-                                        _refreshData();
-                                      } catch (e) {
-                                        _showSnackBar('Erreur: ${e.toString()}', Colors.red);
-                                      } finally {
-                                        setStateModal(() => isSubmitting = false);
-                                      }
-                                    },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: K.primary,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(K.radiusSm),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: _buildDepotSelectorModal(
+                                  'DÉPÔT DESTINATION (CRÉDIT)',
+                                  'Sélectionner la cible',
+                                  selectedDepotDestination,
+                                  _depots.where((d) => d.id != selectedDepotSource).toList(),
+                                      (value) => setStateModal(() => selectedDepotDestination = value),
                                 ),
-                                elevation: 0,
                               ),
-                              child: isSubmitting
-                                  ? const SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.5,
-                                        valueColor: AlwaysStoppedAnimation(Colors.white),
-                                      ),
-                                    )
-                                  : Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        const Icon(Icons.check_rounded, size: 20),
-                                        const SizedBox(width: 8),
-                                        const Text('Créer le transfert'),
-                                      ],
-                                    ),
-                            ),
+                            ],
                           ),
+                          const SizedBox(height: 18),
+                          _buildMotifSelector(
+                            motifCtrl,
+                            selectedMotif,
+                                (value) => setStateModal(() {
+                              selectedMotif = value;
+                              motifCtrl.text = value;
+                            }),
+                          ),
+                          const SizedBox(height: 18),
+                          _buildLignesTransfert(
+                            lignes,
+                            selectedDepotSource,
+                            _products,
+                            _stocks,
+                            setStateModal,
+                          ),
+                          const SizedBox(height: 16),
+                          if (lignes.isNotEmpty) _buildTransfertResume(lignes),
                         ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+
+                  const Divider(height: 1, thickness: 1, color: Color(0x14000000)),
+
+                  // Footer Actions
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 12, 22, 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton(
+                          onPressed: isSubmitting ? null : () => Navigator.pop(dialogContext),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF475569),
+                            side: const BorderSide(color: Color(0x20000000)),
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: const Text(
+                            'Annuler',
+                            style: TextStyle(
+                              fontFamily: kAppFontFamily,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        ElevatedButton(
+                          onPressed: isSubmitting ||
+                              lignes.isEmpty ||
+                              selectedDepotSource == null ||
+                              selectedDepotDestination == null
+                              ? null
+                              : () async {
+                            setStateModal(() => isSubmitting = true);
+                            try {
+                              final user = Provider.of<AuthProvider>(context, listen: false).user;
+                              if (user == null) return;
+
+                              final service = AdminService(user.token);
+                              final transfert = await service.createTransfert(
+                                depotSourceId: selectedDepotSource!,
+                                depotDestinationId: selectedDepotDestination!,
+                                motif: motifCtrl.text.isNotEmpty ? motifCtrl.text : selectedMotif,
+                                lignes: lignes,
+                              );
+
+                              _showSnackBar(
+                                'Transfert #${transfert.numeroBon} enregistré avec succès',
+                                const Color(0xFF107C41),
+                              );
+                              Navigator.pop(dialogContext);
+                              _refreshData();
+                            } catch (e) {
+                              _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
+                            } finally {
+                              setStateModal(() => isSubmitting = false);
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0067C0),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: isSubmitting
+                              ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation(Colors.white),
+                            ),
+                          )
+                              : const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_rounded, size: 16),
+                              SizedBox(width: 6),
+                              Text(
+                                'Créer le transfert',
+                                style: TextStyle(
+                                  fontFamily: kAppFontFamily,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -670,218 +711,181 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
     );
   }
 
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // WIDGETS MODALE
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   Widget _buildDepotSelectorModal(
-    String label,
-    String hint,
-    int? selectedValue,
-    List<Depot> depots,
-    Function(int?) onChanged,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: K.surfaceAlt,
-        borderRadius: BorderRadius.circular(K.radiusSm),
-        border: Border.all(color: K.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                label.contains('source') ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                color: K.primary,
-                size: 16,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                  color: K.textPrimary,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: K.danger.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(K.radiusXl),
-                ),
-                child: const Text(
-                  'Obligatoire',
-                  style: TextStyle(
-                    color: K.danger,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
+      String label,
+      String hint,
+      int? selectedValue,
+      List<Depot> depots,
+      Function(int?) onChanged,
+      ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: kAppFontFamily,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF475569),
+            letterSpacing: 0.6,
           ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: K.surface,
-              borderRadius: BorderRadius.circular(K.radiusSm),
-              border: Border.all(color: K.border),
-            ),
-            child: DropdownButton<int>(
-              value: selectedValue,
-              isExpanded: true,
-              hint: Text(hint, style: const TextStyle(color: K.textMuted, fontSize: 13)),
-              underline: Container(),
-              dropdownColor: K.surface,
-              items: depots.map((depot) {
-                return DropdownMenuItem(
-                  value: depot.id,
-                  child: Row(
-                    children: [
-                      Icon(
-                        depot.estMagasin ? Icons.store_rounded : Icons.warehouse_rounded,
-                        color: K.primary,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(depot.nom, style: const TextStyle(color: K.textPrimary)),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: K.info.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(K.radiusXl),
-                        ),
-                        child: Text(
-                          depot.estMagasin ? 'Magasin' : 'Entrepôt',
-                          style: const TextStyle(fontSize: 9, color: K.info, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) => onChanged(value),
-            ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
-        ],
-      ),
+          child: DropdownButton<int>(
+            value: selectedValue,
+            isExpanded: true,
+            hint: Text(hint, style: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFFA0AEC0), fontSize: 12.5)),
+            underline: const SizedBox(),
+            dropdownColor: const Color(0xFFFFFFFF),
+            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B), size: 18),
+            items: depots.map((depot) {
+              return DropdownMenuItem(
+                value: depot.id,
+                child: Row(
+                  children: [
+                    Icon(
+                      depot.estMagasin ? Icons.storefront_outlined : Icons.warehouse_outlined,
+                      color: const Color(0xFF0067C0),
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      depot.nom,
+                      style: const TextStyle(
+                        fontFamily: kAppFontFamily,
+                        color: Color(0xFF0F172A),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+            onChanged: (value) => onChanged(value),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildMotifSelector(
-    TextEditingController controller,
-    String selectedValue,
-    Function(String) onChanged,
-  ) {
-    final motifs = ['Réapprovisionnement', 'Régularisation', 'Vente', 'Retour fournisseur', 'Autre'];
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: K.surfaceAlt,
-        borderRadius: BorderRadius.circular(K.radiusSm),
-        border: Border.all(color: K.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.description_rounded, color: K.primary, size: 16),
-              SizedBox(width: 8),
-              Text(
-                'Motif du transfert',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                  color: K.textPrimary,
-                ),
-              ),
-            ],
+      TextEditingController controller,
+      String selectedValue,
+      Function(String) onChanged,
+      ) {
+    final motifs = [
+      'Réapprovisionnement',
+      'Régularisation',
+      'Vente',
+      'Retour fournisseur',
+      'Autre'
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'MOTIF DU MOUVEMENT',
+          style: TextStyle(
+            fontFamily: kAppFontFamily,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF475569),
+            letterSpacing: 0.6,
           ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: motifs.map((motif) {
+            final isSelected = selectedValue == motif;
+            return ChoiceChip(
+              label: Text(motif),
+              selected: isSelected,
+              onSelected: (selected) {
+                if (selected) onChanged(motif);
+              },
+              selectedColor: const Color(0xFFE8F2FB),
+              backgroundColor: const Color(0xFFF8FAFC),
+              labelStyle: TextStyle(
+                fontFamily: kAppFontFamily,
+                color: isSelected ? const Color(0xFF0067C0) : const Color(0xFF475569),
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                fontSize: 12,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+                side: BorderSide(color: isSelected ? const Color(0xFF0067C0) : const Color(0xFFE2E8F0)),
+              ),
+            );
+          }).toList(),
+        ),
+        if (selectedValue == 'Autre') ...[
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: motifs.map((motif) {
-              final isSelected = selectedValue == motif;
-              return ChoiceChip(
-                label: Text(motif, style: TextStyle(fontSize: 12)),
-                selected: isSelected,
-                onSelected: (selected) {
-                  if (selected) {
-                    onChanged(motif);
-                  }
-                },
-                selectedColor: K.primary.withOpacity(0.2),
-                backgroundColor: K.surface,
-                labelStyle: TextStyle(
-                  color: isSelected ? K.primary : K.textMuted,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(K.radiusXl),
-                  side: BorderSide(color: isSelected ? K.primary : K.border),
-                ),
-              );
-            }).toList(),
-          ),
-          if (selectedValue == 'Autre') ...[
-            const SizedBox(height: 8),
-            TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                hintText: 'Précisez le motif...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(K.radiusSm),
-                  borderSide: BorderSide(color: K.border),
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-              onChanged: (value) => onChanged(value),
+          TextField(
+            controller: controller,
+            style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: 'Précisez le motif du transfert...',
+              hintStyle: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFFA0AEC0), fontSize: 12.5),
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.5)),
             ),
-          ],
+            onChanged: (value) => onChanged(value),
+          ),
         ],
-      ),
+      ],
     );
   }
 
   Widget _buildLignesTransfert(
-    List<TransfertLigne> lignes,
-    int? selectedDepotSource,
-    List<Product> products,
-    List<Stock> stocks,
-    StateSetter setStateModal,
-  ) {
+      List<TransfertLigne> lignes,
+      int? selectedDepotSource,
+      List<Product> products,
+      List<Stock> stocks,
+      StateSetter setStateModal,
+      ) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: K.surfaceAlt,
-        borderRadius: BorderRadius.circular(K.radiusSm),
-        border: Border.all(color: K.border),
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0x14000000)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.add_rounded, color: K.primary, size: 16),
-              const SizedBox(width: 8),
               const Text(
-                'Produits à transférer',
+                'ARTICLES À TRANSFÉRER',
                 style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                  color: K.textPrimary,
+                  fontFamily: kAppFontFamily,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF475569),
+                  letterSpacing: 0.6,
                 ),
               ),
               const Spacer(),
               if (selectedDepotSource != null)
-                ElevatedButton.icon(
+                OutlinedButton.icon(
                   onPressed: () {
                     _showAddProductToTransferDialog(
                       lignes,
@@ -891,28 +895,26 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
                       setStateModal,
                     );
                   },
-                  icon: const Icon(Icons.add_rounded, size: 16),
-                  label: const Text('Ajouter un produit'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: K.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(K.radiusSm),
-                    ),
-                    elevation: 0,
+                  icon: const Icon(Icons.add_rounded, size: 15),
+                  label: const Text('Ajouter un article'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0067C0),
+                    side: const BorderSide(color: Color(0xFF0067C0)),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    textStyle: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, fontWeight: FontWeight.w600),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           if (lignes.isEmpty)
             const Center(
               child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
+                padding: EdgeInsets.symmetric(vertical: 16),
                 child: Text(
-                  'Aucun produit ajouté',
-                  style: TextStyle(color: K.textMuted, fontSize: 13),
+                  'Aucun article ajouté au transfert',
+                  style: TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF94A3B8), fontSize: 12.5),
                 ),
               ),
             )
@@ -921,49 +923,51 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: lignes.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0x12000000)),
               itemBuilder: (context, index) {
                 final ligne = lignes[index];
-                final product = products.firstWhere((p) => p.id == ligne.produitId);
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: K.accentSoft,
-                      borderRadius: BorderRadius.circular(K.radiusSm),
-                    ),
-                    child: Center(
-                      child: Text(
-                        product.code.substring(0, 1).toUpperCase(),
-                        style: const TextStyle(
-                          color: K.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                final product = products.where((p) => p.id == ligne.produitId).firstOrNull;
+                final productName = product?.nom ?? 'Article inconnu';
+                final productCode = product?.code ?? 'N/A';
+                final productUnite = product?.unite ?? 'unité';
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E8F0),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          productCode,
+                          style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700, fontSize: 11, color: Color(0xFF1E293B)),
                         ),
                       ),
-                    ),
-                  ),
-                  title: Text(
-                    product.nom,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      color: K.textPrimary,
-                    ),
-                  ),
-                  subtitle: Text(
-                    '${product.code} • Qté: ${ligne.quantite} ${product.unite}',
-                    style: const TextStyle(color: K.textMuted, fontSize: 12),
-                  ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.close_rounded, color: K.danger),
-                    onPressed: () {
-                      setStateModal(() {
-                        lignes.removeAt(index);
-                      });
-                    },
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          productName,
+                          style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF0F172A)),
+                        ),
+                      ),
+                      Text(
+                        'Qté: ${ligne.quantite} $productUnite',
+                        style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w600, fontSize: 12.5, color: Color(0xFF0067C0)),
+                      ),
+                      const SizedBox(width: 10),
+                      IconButton(
+                        splashRadius: 14,
+                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFC42B1C), size: 18),
+                        onPressed: () {
+                          setStateModal(() {
+                            lignes.removeAt(index);
+                          });
+                        },
+                      ),
+                    ],
                   ),
                 );
               },
@@ -974,113 +978,95 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
   }
 
   void _showAddProductToTransferDialog(
-    List<TransfertLigne> lignes,
-    int depotSourceId,
-    List<Product> products,
-    List<Stock> stocks,
-    StateSetter setStateModal,
-  ) {
+      List<TransfertLigne> lignes,
+      int depotSourceId,
+      List<Product> products,
+      List<Stock> stocks,
+      StateSetter setStateModal,
+      ) {
     int? selectedProductId;
     int quantity = 1;
     final TextEditingController quantityCtrl = TextEditingController(text: '1');
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
+      builder: (dialogContext) => StatefulBuilder(
         builder: (context, setStateDialog) {
           final availableProducts = products.where((p) {
-            final stock = stocks.firstWhere(
-              (s) => s.produitId == p.id && s.depotId == depotSourceId,
-              orElse: () => Stock(
-                id: 0,
-                produitId: p.id,
-                depotId: depotSourceId,
-                quantite: 0,
-                quantiteMinimale: 0,
-                quantiteMaximale: 0,
-                enAlerte: false,
-                createdAt: DateTime.now(),
-                updatedAt: DateTime.now(),
-              ),
-            );
-            return stock.quantite > 0;
+            final stock = stocks.where((s) => s.produitId == p.id && s.depotId == depotSourceId).firstOrNull;
+            return stock != null && stock.quantite > 0;
           }).toList();
 
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(K.radiusXl)),
-            title: const Text('Ajouter un produit'),
+            backgroundColor: const Color(0xFFFFFFFF),
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text(
+              'Ajouter un article au bon',
+              style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 16),
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 DropdownButton<int>(
                   value: selectedProductId,
                   isExpanded: true,
-                  hint: const Text('Sélectionner un produit'),
+                  hint: const Text('Sélectionner un article disponible', style: TextStyle(fontFamily: kAppFontFamily, fontSize: 13)),
+                  dropdownColor: const Color(0xFFFFFFFF),
                   items: availableProducts.map((p) {
-                    final stock = stocks.firstWhere(
-                      (s) => s.produitId == p.id && s.depotId == depotSourceId,
-                    );
+                    final stock = stocks.firstWhere((s) => s.produitId == p.id && s.depotId == depotSourceId);
                     return DropdownMenuItem(
                       value: p.id,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${p.nom} (Stock: ${stock.quantite} ${p.unite})',
-                              style: const TextStyle(fontSize: 13),
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        '${p.nom} (Dispo : ${stock.quantite} ${p.unite})',
+                        style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 13),
                       ),
                     );
                   }).toList(),
                   onChanged: (value) => setStateDialog(() => selectedProductId = value),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: quantityCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Quantité',
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: (value) {
-                          final parsed = int.tryParse(value);
-                          if (parsed != null && parsed > 0) {
-                            quantity = parsed;
-                          }
-                        },
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 14),
+                TextField(
+                  controller: quantityCtrl,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 13),
+                  decoration: const InputDecoration(
+                    labelText: 'Quantité à transférer',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) {
+                    final parsed = int.tryParse(value);
+                    if (parsed != null && parsed > 0) {
+                      quantity = parsed;
+                    }
+                  },
                 ),
               ],
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Annuler'),
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Annuler', style: TextStyle(fontFamily: kAppFontFamily)),
               ),
               ElevatedButton(
                 onPressed: selectedProductId == null
                     ? null
                     : () {
-                        setStateModal(() {
-                          lignes.add(TransfertLigne(
-                            produitId: selectedProductId!,
-                            quantite: quantity,
-                          ));
-                        });
-                        Navigator.pop(context);
-                      },
+                  setStateModal(() {
+                    lignes.add(TransfertLigne(
+                      produitId: selectedProductId!,
+                      quantite: quantity,
+                    ));
+                  });
+                  Navigator.pop(dialogContext);
+                },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: K.primary,
+                  backgroundColor: const Color(0xFF0067C0),
                   foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                 ),
-                child: const Text('Ajouter'),
+                child: const Text('Ajouter', style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700)),
               ),
             ],
           );
@@ -1089,30 +1075,310 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
     );
   }
 
-  Widget _buildTransfertResume(List<TransfertLigne> lignes, List<Product> products) {
+  Widget _buildTransfertResume(List<TransfertLigne> lignes) {
     final totalItems = lignes.fold(0, (sum, l) => sum + l.quantite);
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: K.success.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(K.radiusSm),
-        border: Border.all(color: K.success.withOpacity(0.2)),
+        color: const Color(0xFFE8F2FB),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const Text(
-            'Résumé :',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: K.success,
-            ),
+            'RÉCAPITULATIF :',
+            style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 11, color: Color(0xFF0067C0)),
           ),
           Text(
-            '${lignes.length} produit(s) • $totalItems unités',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: K.success,
+            '${lignes.length} référence(s) • $totalItems unités au total',
+            style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 12.5, color: Color(0xFF0067C0)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // BUILD PRINCIPAL
+  // ---------------------------------------------------------------------------
+  @override
+  Widget build(BuildContext context) {
+    final isWide = MediaQuery.of(context).size.width >= 960;
+
+    return Material(
+      color: Colors.transparent,
+      child: _isLoading
+          ? const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFF0067C0),
+          strokeWidth: 2.2,
+        ),
+      )
+          : FadeTransition(
+        opacity: _fadeAnimation,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 1. Indicateurs Synthétiques avec Ondes Fluides
+            _buildTransferMetricsRow(),
+            const SizedBox(height: 18),
+
+            // 2. Barre d'outils et Filtres
+            _buildActionBar(isWide),
+            const SizedBox(height: 14),
+
+            // 3. Tableau de données principal
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFFFF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0x18000000), width: 1),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x06000000),
+                      blurRadius: 12,
+                      offset: Offset(0, 3),
+                    ),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: _filteredTransferts.isEmpty
+                    ? _buildEmptyState()
+                    : isWide
+                    ? _buildDesktopDataTable()
+                    : _buildMobileList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 1. LES CARTES DE MÉTRIQUES STYLISÉES AVEC ONDES FLUIDES (WINDOWS BLOOM)
+  // ---------------------------------------------------------------------------
+  Widget _buildTransferMetricsRow() {
+    final total = _transferts.length;
+    final enAttente = _transferts.where((t) => t.statut == 'en_attente').length;
+    final effectues = _transferts.where((t) => t.statut == 'effectue').length;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 740;
+
+        final cards = [
+          _buildWaveMetricCard(
+            title: "TOTAL TRANSFERTS",
+            value: "$total",
+            subtitle: "Bons enregistrés",
+            badge: "Mouvements",
+            icon: Icons.swap_horiz_rounded,
+            gradient: const [
+              Color(0xFF004E8C),
+              Color(0xFF0067C0),
+              Color(0xFF2886DE),
+            ],
+            waveSeed: 1.2,
+          ),
+          _buildWaveMetricCard(
+            title: "EN ATTENTE",
+            value: "$enAttente",
+            subtitle: "Ordres à valider",
+            badge: "Validation",
+            icon: Icons.hourglass_empty_rounded,
+            gradient: const [
+              Color(0xFF0A3B5C),
+              Color(0xFF165B8C),
+              Color(0xFF3A89C9),
+            ],
+            waveSeed: 2.4,
+          ),
+          _buildWaveMetricCard(
+            title: "SOLDÉS & EFFECTUÉS",
+            value: "$effectues",
+            subtitle: "Transferts clôturés",
+            badge: "Clôturés",
+            icon: Icons.check_circle_outline_rounded,
+            gradient: const [
+              Color(0xFF1E293B),
+              Color(0xFF334155),
+              Color(0xFF475569),
+            ],
+            waveSeed: 3.6,
+          ),
+        ];
+
+        if (isNarrow) {
+          return Column(
+            children: [
+              cards[0],
+              const SizedBox(height: 12),
+              cards[1],
+              const SizedBox(height: 12),
+              cards[2],
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: cards[0]),
+            const SizedBox(width: 14),
+            Expanded(child: cards[1]),
+            const SizedBox(width: 14),
+            Expanded(child: cards[2]),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildWaveMetricCard({
+    required String title,
+    required String value,
+    required String subtitle,
+    required String badge,
+    required IconData icon,
+    required List<Color> gradient,
+    required double waveSeed,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFFFF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0x18000000), width: 1),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Bannière supérieure fluide
+          SizedBox(
+            height: 64,
+            child: Stack(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: gradient,
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: TransferMetricWavePainter(waveSeed: waveSeed),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(icon, color: Colors.white, size: 16),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.25),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          badge,
+                          style: const TextStyle(
+                            fontFamily: kAppFontFamily,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Pied de carte blanc
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontFamily: kAppFontFamily,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF64748B),
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            value,
+                            style: const TextStyle(
+                              fontFamily: kAppFontFamily,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F172A),
+                              letterSpacing: -0.6,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              subtitle,
+                              style: const TextStyle(
+                                fontFamily: kAppFontFamily,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w400,
+                                color: Color(0xFF94A3B8),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.more_horiz_rounded,
+                  size: 16,
+                  color: Color(0xFFCBD5E1),
+                ),
+              ],
             ),
           ),
         ],
@@ -1120,104 +1386,68 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
     );
   }
 
-  // ---------------------------------------------------------------------
-  // WIDGETS PRINCIPAUX
-  // ---------------------------------------------------------------------
-  @override
-  Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 900;
+  // ---------------------------------------------------------------------------
+  // 2. BARRE D'ACTIONS & FILTRES
+  // ---------------------------------------------------------------------------
+  Widget _buildActionBar(bool isWide) {
+    final filters = ['Tous', 'en_attente', 'valide', 'effectue', 'annule'];
+    final labels = ['Tous', 'En attente', 'Validés', 'Effectués', 'Annulés'];
 
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: K.surface,
-        borderRadius: BorderRadius.circular(K.radius),
-        border: Border.all(color: K.border),
-        boxShadow: [K.cardShadow],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: _isLoading
-            ? const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(color: K.primary),
-                    SizedBox(height: 16),
-                    Text(
-                      'Chargement des transferts...',
-                      style: TextStyle(color: K.textMuted),
-                    ),
-                  ],
-                ),
-              )
-            : FadeTransition(
-                opacity: _fadeAnimation,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeader(),
-                    const SizedBox(height: 16),
-                    _buildFilters(),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: _filteredTransferts.isEmpty
-                          ? _buildEmptyState()
-                          : isWide
-                              ? _buildDesktopList()
-                              : _buildMobileList(),
-                    ),
-                  ],
-                ),
-              ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
     return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: K.primary.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(K.radiusSm),
+        // Pastilles de filtre
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(filters.length, (index) {
+                final isSelected = _selectedFilter == filters[index];
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(labels[index]),
+                    selected: isSelected,
+                    onSelected: (_) => _filterTransferts(filters[index]),
+                    selectedColor: const Color(0xFFE8F2FB),
+                    backgroundColor: const Color(0xFFFFFFFF),
+                    labelStyle: TextStyle(
+                      fontFamily: kAppFontFamily,
+                      color: isSelected ? const Color(0xFF0067C0) : const Color(0xFF475569),
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      fontSize: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: isSelected ? const Color(0xFF0067C0) : const Color(0x18000000)),
+                    ),
+                  ),
+                );
+              }),
+            ),
           ),
-          child: const Icon(Icons.swap_horiz_rounded, color: K.primary, size: 24),
         ),
+
         const SizedBox(width: 12),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Transferts entre dépôts',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: K.textPrimary,
-                ),
+
+        // Bouton Nouveau Transfert
+        SizedBox(
+          height: 38,
+          child: ElevatedButton.icon(
+            onPressed: _showCreateTransferDialog,
+            icon: const Icon(Icons.add_rounded, size: 17),
+            label: Text(isWide ? "Nouveau Transfert" : "Créer"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0067C0),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              textStyle: const TextStyle(
+                fontFamily: kAppFontFamily,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                letterSpacing: 0.1,
               ),
-              Text(
-                'Gérez les mouvements de stock entre dépôts',
-                style: TextStyle(
-                  color: K.textMuted,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-        ),
-        ElevatedButton.icon(
-          onPressed: _showCreateTransferDialog,
-          icon: const Icon(Icons.swap_horiz_rounded, size: 18),
-          label: const Text('Nouveau Transfert'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: K.primary,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(K.radiusSm),
             ),
           ),
         ),
@@ -1225,540 +1455,447 @@ class _StockTransfersState extends State<StockTransfers> with SingleTickerProvid
     );
   }
 
-  Widget _buildFilters() {
-    final filters = ['Tous', 'en_attente', 'valide', 'effectue', 'annule'];
-    final labels = ['Tous', 'En attente', 'Validés', 'Effectués', 'Annulés'];
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          ...List.generate(filters.length, (index) {
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: _buildFilterChip(labels[index], _selectedFilter == filters[index], filters[index]),
-            );
-          }),
-          const SizedBox(width: 8),
-          _buildDateRangePicker(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(String label, bool selected, String filterValue) {
-    return FilterChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => _filterTransferts(filterValue),
-      backgroundColor: K.surfaceAlt,
-      selectedColor: K.accentSoft,
-      labelStyle: TextStyle(
-        color: selected ? K.primary : K.textMuted,
-        fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(K.radiusSm),
-        side: BorderSide(
-          color: selected ? K.primary : K.border,
-          width: selected ? 1.5 : 1,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDateRangePicker() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        border: Border.all(color: K.border),
-        borderRadius: BorderRadius.circular(K.radiusSm),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.calendar_today_rounded, color: K.textMuted, size: 16),
-          const SizedBox(width: 8),
-          const Text(
-            'Sélectionner une période',
-            style: TextStyle(color: K.textMuted, fontSize: 12),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.arrow_drop_down_rounded, color: K.textMuted),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------
-  // LISTES
-  // ---------------------------------------------------------------------
-  Widget _buildDesktopList() {
-    return ListView.separated(
-      itemCount: _filteredTransferts.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final transfert = _filteredTransferts[index];
-        return _buildTransfertCard(transfert);
-      },
-    );
-  }
-
-  Widget _buildMobileList() {
-    return ListView.separated(
-      itemCount: _filteredTransferts.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final transfert = _filteredTransferts[index];
-        return _buildTransfertCard(transfert);
-      },
-    );
-  }
-
-  // ---------------------------------------------------------------------
-  // CARTE TRANSFERT
-  // ---------------------------------------------------------------------
-  Widget _buildTransfertCard(Transfert transfert) {
-    final statusColor = _getStatusColor(transfert.statut);
-    final statusLabel = _getStatusLabel(transfert.statut);
-
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(K.radiusSm),
-        side: BorderSide(color: statusColor.withOpacity(0.3), width: 1.5),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(K.radiusSm),
-                  ),
-                  child: Icon(
-                    _getStatusIcon(transfert.statut),
-                    color: statusColor,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        transfert.numeroBon,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: K.textPrimary,
+  // ---------------------------------------------------------------------------
+  // 3. TABLEAU DESKTOP HAUTE LISIBILITÉ
+  // ---------------------------------------------------------------------------
+  Widget _buildDesktopDataTable() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.vertical,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                headingRowHeight: 42,
+                dataRowMinHeight: 52,
+                dataRowMaxHeight: 52,
+                horizontalMargin: 20,
+                columnSpacing: 24,
+                dividerThickness: 1,
+                columns: const [
+                  DataColumn(label: Text("N° BON", style: _headerStyle)),
+                  DataColumn(label: Text("MOUVEMENT DÉPÔTS", style: _headerStyle)),
+                  DataColumn(label: Text("DATE", style: _headerStyle)),
+                  DataColumn(label: Text("MOTIF", style: _headerStyle)),
+                  DataColumn(label: Text("VOLUME", style: _headerStyle)),
+                  DataColumn(label: Text("STATUT", style: _headerStyle)),
+                  DataColumn(label: Text("ACTIONS", style: _headerStyle)),
+                ],
+                rows: _filteredTransferts.map((transfert) {
+                  return DataRow(
+                    cells: [
+                      // N° Bon
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0x10000000)),
+                          ),
+                          child: Text(
+                            transfert.numeroBon,
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1E293B),
+                              fontSize: 12,
+                            ),
+                          ),
                         ),
                       ),
-                      Text(
-                        '${transfert.depotSourceNom} → ${transfert.depotDestinationNom}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: K.textMuted,
+
+                      // Trajet
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              transfert.depotSourceNom,
+                              style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF0F172A)),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 6),
+                              child: Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF0067C0)),
+                            ),
+                            Text(
+                              transfert.depotDestinationNom,
+                              style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF0F172A)),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Date
+                      DataCell(
+                        Text(
+                          transfert.dateTransfert,
+                          style: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF64748B), fontSize: 12.5),
+                        ),
+                      ),
+
+                      // Motif
+                      DataCell(
+                        Text(
+                          transfert.motif,
+                          style: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF1E293B), fontSize: 13),
+                        ),
+                      ),
+
+                      // Volume
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${transfert.lignes.length} article(s)',
+                            style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w600, fontSize: 11.5, color: Color(0xFF475569)),
+                          ),
+                        ),
+                      ),
+
+                      // Statut
+                      DataCell(_buildStatusBadge(transfert.statut)),
+
+                      // Actions
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: _buildTableActions(transfert),
                         ),
                       ),
                     ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(K.radiusXl),
-                    border: Border.all(color: statusColor.withOpacity(0.3)),
-                  ),
-                  child: Text(
-                    statusLabel,
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
+                  );
+                }).toList(),
+              ),
             ),
-            const SizedBox(height: 12),
+          ),
+        );
+      },
+    );
+  }
 
-            Row(
-              children: [
-                _buildInfoChip(
-                  icon: Icons.calendar_today_rounded,
-                  label: transfert.dateTransfert,
-                ),
-                const SizedBox(width: 8),
-                _buildInfoChip(
-                  icon: Icons.description_rounded,
-                  label: transfert.motif,
-                ),
-                const SizedBox(width: 8),
-                _buildInfoChip(
-                  icon: Icons.inventory_2_rounded,
-                  label: '${transfert.lignes.length} produits',
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
+  static const TextStyle _headerStyle = TextStyle(
+    fontFamily: kAppFontFamily,
+    fontSize: 10.5,
+    fontWeight: FontWeight.w700,
+    color: Color(0xFF64748B),
+    letterSpacing: 0.6,
+  );
 
-            // Actions
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                // ✅ Afficher les boutons uniquement si admin
-                if (_isAdmin) ...[
-                  if (transfert.statut == 'en_attente') ...[
-                    OutlinedButton.icon(
-                      onPressed: _isSubmitting ? null : () => _validerTransfert(transfert),
-                      icon: _isSubmitting
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: K.success,
-                              ),
-                            )
-                          : const Icon(Icons.check_rounded, size: 16),
-                      label: const Text('Valider'),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: K.success),
-                        foregroundColor: K.success,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      onPressed: _isSubmitting ? null : () => _annulerTransfert(transfert),
-                      icon: _isSubmitting
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: K.danger,
-                              ),
-                            )
-                          : const Icon(Icons.close_rounded, size: 16),
-                      label: const Text('Annuler'),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: K.danger),
-                        foregroundColor: K.danger,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      ),
-                    ),
-                  ],
-                  if (transfert.statut == 'valide') ...[
-                    OutlinedButton.icon(
-                      onPressed: _isSubmitting ? null : () => _effectuerTransfert(transfert),
-                      icon: _isSubmitting
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: K.success,
-                              ),
-                            )
-                          : const Icon(Icons.play_arrow_rounded, size: 16),
-                      label: const Text('Effectuer'),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: K.success),
-                        foregroundColor: K.success,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      onPressed: _isSubmitting ? null : () => _annulerTransfert(transfert),
-                      icon: _isSubmitting
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: K.danger,
-                              ),
-                            )
-                          : const Icon(Icons.close_rounded, size: 16),
-                      label: const Text('Annuler'),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: K.danger),
-                        foregroundColor: K.danger,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      ),
-                    ),
-                  ],
-                ],
-                // ✅ Badge de statut
-                if (transfert.statut == 'effectue') ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: K.success.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(K.radiusXl),
-                    ),
-                    child: const Text(
-                      '✅ Terminé',
-                      style: TextStyle(
-                        color: K.success,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
-                if (transfert.statut == 'annule') ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: K.danger.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(K.radiusXl),
-                    ),
-                    child: const Text(
-                      '❌ Annulé',
-                      style: TextStyle(
-                        color: K.danger,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
+  List<Widget> _buildTableActions(Transfert transfert) {
+    final actions = <Widget>[];
+
+    if (_isAdmin) {
+      if (transfert.statut == 'en_attente') {
+        actions.add(
+          ElevatedButton(
+            onPressed: _isSubmitting ? null : () => _validerTransfert(transfert),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0067C0),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              textStyle: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, fontWeight: FontWeight.w700),
             ),
-          ],
+            child: const Text('Valider'),
+          ),
+        );
+        actions.add(const SizedBox(width: 6));
+        actions.add(
+          OutlinedButton(
+            onPressed: _isSubmitting ? null : () => _annulerTransfert(transfert),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFC42B1C),
+              side: const BorderSide(color: Color(0xFFC42B1C)),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              textStyle: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, fontWeight: FontWeight.w600),
+            ),
+            child: const Text('Annuler'),
+          ),
+        );
+      } else if (transfert.statut == 'valide') {
+        actions.add(
+          ElevatedButton(
+            onPressed: _isSubmitting ? null : () => _effectuerTransfert(transfert),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF107C41),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              textStyle: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, fontWeight: FontWeight.w700),
+            ),
+            child: const Text('Effectuer'),
+          ),
+        );
+        actions.add(const SizedBox(width: 6));
+        actions.add(
+          OutlinedButton(
+            onPressed: _isSubmitting ? null : () => _annulerTransfert(transfert),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFC42B1C),
+              side: const BorderSide(color: Color(0xFFC42B1C)),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              textStyle: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, fontWeight: FontWeight.w600),
+            ),
+            child: const Text('Annuler'),
+          ),
+        );
+      }
+    }
+
+    if (transfert.statut == 'effectue') {
+      actions.add(
+        const Text(
+          'Terminé',
+          style: TextStyle(fontFamily: kAppFontFamily, fontSize: 12, color: Color(0xFF107C41), fontWeight: FontWeight.w600),
+        ),
+      );
+    }
+
+    if (transfert.statut == 'annule') {
+      actions.add(
+        const Text(
+          'Annulé',
+          style: TextStyle(fontFamily: kAppFontFamily, fontSize: 12, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+        ),
+      );
+    }
+
+    return actions;
+  }
+
+  // ---------------------------------------------------------------------------
+  // 4. LISTE MOBILE
+  // ---------------------------------------------------------------------------
+  Widget _buildMobileList() {
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: _filteredTransferts.length,
+      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0x12000000)),
+      itemBuilder: (context, index) {
+        final transfert = _filteredTransferts[index];
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    transfert.numeroBon,
+                    style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF0067C0)),
+                  ),
+                  _buildStatusBadge(transfert.statut),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${transfert.depotSourceNom} → ${transfert.depotDestinationNom}',
+                style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 13.5, color: Color(0xFF0F172A)),
+              ),
+              Text(
+                '${transfert.dateTransfert} • ${transfert.motif} • ${transfert.lignes.length} article(s)',
+                style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: _buildTableActions(transfert),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // BADGE STATUT
+  // ---------------------------------------------------------------------------
+  Widget _buildStatusBadge(String status) {
+    Color color;
+    Color bgColor;
+    String label;
+
+    switch (status) {
+      case 'en_attente':
+        color = const Color(0xFFB45309);
+        bgColor = const Color(0xFFFEF3C7);
+        label = 'En attente';
+        break;
+      case 'valide':
+        color = const Color(0xFF0067C0);
+        bgColor = const Color(0xFFE8F2FB);
+        label = 'Validé';
+        break;
+      case 'effectue':
+        color = const Color(0xFF107C41);
+        bgColor = const Color(0xFFE6F4EA);
+        label = 'Effectué';
+        break;
+      case 'annule':
+        color = const Color(0xFFC42B1C);
+        bgColor = const Color(0xFFFDE8E8);
+        label = 'Annulé';
+        break;
+      default:
+        color = const Color(0xFF64748B);
+        bgColor = const Color(0xFFF1F5F9);
+        label = status;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontFamily: kAppFontFamily,
+          color: color,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
   }
 
-  Widget _buildInfoChip({required IconData icon, required String label}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: K.surfaceAlt,
-        borderRadius: BorderRadius.circular(K.radiusXl),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: K.textMuted),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              color: K.textMuted,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------
-  // UTILITAIRES
-  // ---------------------------------------------------------------------
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'en_attente':
-        return K.warning;
-      case 'valide':
-        return K.info;
-      case 'effectue':
-        return K.success;
-      case 'annule':
-        return K.danger;
-      default:
-        return K.textMuted;
-    }
-  }
-
-  String _getStatusLabel(String status) {
-    switch (status) {
-      case 'en_attente':
-        return 'En attente';
-      case 'valide':
-        return 'Validé';
-      case 'effectue':
-        return 'Effectué';
-      case 'annule':
-        return 'Annulé';
-      default:
-        return status;
-    }
-  }
-
-  IconData _getStatusIcon(String status) {
-    switch (status) {
-      case 'en_attente':
-        return Icons.hourglass_empty_rounded;
-      case 'valide':
-        return Icons.check_circle_rounded;
-      case 'effectue':
-        return Icons.check_circle_rounded;
-      case 'annule':
-        return Icons.cancel_rounded;
-      default:
-        return Icons.help_rounded;
-    }
-  }
-
+  // ---------------------------------------------------------------------------
+  // ÉTAT VIDE
+  // ---------------------------------------------------------------------------
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.swap_horiz_rounded,
-            size: 64,
-            color: K.textMuted,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _selectedFilter != 'Tous' ? 'Aucun transfert avec ce statut' : 'Aucun transfert enregistré',
-            style: const TextStyle(color: K.textMuted, fontSize: 16),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _selectedFilter != 'Tous' ? 'Essayez un autre filtre' : 'Créez votre premier transfert',
-            style: const TextStyle(color: K.textMuted, fontSize: 13),
-          ),
-          if (_selectedFilter != 'Tous') ...[
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: () => _filterTransferts('Tous'),
-              child: const Text('Voir tous les transferts'),
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF1F5F9),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.swap_horiz_rounded, size: 32, color: Color(0xFF94A3B8)),
             ),
+            const SizedBox(height: 14),
+            Text(
+              _selectedFilter != 'Tous'
+                  ? 'Aucun transfert avec ce statut'
+                  : 'Aucun transfert enregistré',
+              style: const TextStyle(
+                fontFamily: kAppFontFamily,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _selectedFilter != 'Tous'
+                  ? 'Essayez de sélectionner un autre filtre.'
+                  : 'Cliquez sur "Nouveau Transfert" pour initier un mouvement.',
+              style: const TextStyle(
+                fontFamily: kAppFontFamily,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w400,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            if (_selectedFilter != 'Tous') ...[
+              const SizedBox(height: 14),
+              OutlinedButton(
+                onPressed: () => _filterTransferts('Tous'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF0067C0),
+                  side: const BorderSide(color: Color(0xFF0067C0)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+                child: const Text(
+                  'Voir tous les transferts',
+                  style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w600, fontSize: 12),
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
 }
 
-// ---------------------------------------------------------------------
-// MODÈLES
-// ---------------------------------------------------------------------
-class Transfert {
-  final int id;
-  final String numeroBon;
-  final int depotSourceId;
-  final String depotSourceNom;
-  final int depotDestinationId;
-  final String depotDestinationNom;
-  final String dateTransfert;
-  final String motif;
-  final String statut;
-  final List<TransfertLigne> lignes;
-  final String? dateValidation;
-  final String? dateEffectue;
-  final int? validePar;
-  final int createdBy;
+// ---------------------------------------------------------------------------
+// PAINTER VECTORIEL : ONDES FLUIDES DES CARTES TRANSFERTS
+// ---------------------------------------------------------------------------
+class TransferMetricWavePainter extends CustomPainter {
+  final double waveSeed;
 
-  Transfert({
-    required this.id,
-    required this.numeroBon,
-    required this.depotSourceId,
-    required this.depotSourceNom,
-    required this.depotDestinationId,
-    required this.depotDestinationNom,
-    required this.dateTransfert,
-    required this.motif,
-    required this.statut,
-    required this.lignes,
-    this.dateValidation,
-    this.dateEffectue,
-    this.validePar,
-    required this.createdBy,
-  });
+  TransferMetricWavePainter({required this.waveSeed});
 
-  factory Transfert.fromJson(Map<String, dynamic> json) {
-    final lignes = (json['lignes'] as List? ?? [])
-        .map((l) => TransfertLigne.fromJson(l))
-        .toList();
+  @override
+  void paint(Canvas canvas, Size size) {
+    final strokePaint = Paint()
+      ..color = Colors.white.withOpacity(0.22)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
 
-    return Transfert(
-      id: json['id'] as int,
-      numeroBon: json['numero_bon'] as String,
-      depotSourceId: json['depot_source_id'] as int,
-      depotSourceNom: json['depot_source_nom'] as String,
-      depotDestinationId: json['depot_destination_id'] as int,
-      depotDestinationNom: json['depot_destination_nom'] as String,
-      dateTransfert: json['date_transfert'] as String,
-      motif: json['motif'] as String,
-      statut: json['statut'] as String,
-      lignes: lignes,
-      dateValidation: json['date_validation'] as String?,
-      dateEffectue: json['date_effectue'] as String?,
-      validePar: json['valide_par'] as int?,
-      createdBy: json['created_by'] as int,
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.white.withOpacity(0.20),
+          Colors.white.withOpacity(0.02),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..style = PaintingStyle.fill;
+
+    final path = Path();
+    path.moveTo(0, size.height * 0.85);
+
+    path.cubicTo(
+      size.width * 0.28,
+      size.height * (0.35 + 0.12 * math.sin(waveSeed)),
+      size.width * 0.60,
+      size.height * (0.95 - 0.12 * math.cos(waveSeed)),
+      size.width,
+      size.height * 0.40,
     );
-  }
-}
 
-class TransfertLigne {
-  final int produitId;
-  final int quantite;
-  final String? produitNom;
-  final String? produitCode;
+    path.lineTo(size.width, size.height);
+    path.lineTo(0, size.height);
+    path.close();
 
-  TransfertLigne({
-    required this.produitId,
-    required this.quantite,
-    this.produitNom,
-    this.produitCode,
-  });
+    canvas.drawPath(path, fillPaint);
 
-  factory TransfertLigne.fromJson(Map<String, dynamic> json) {
-    return TransfertLigne(
-      produitId: json['produit_id'] as int,
-      quantite: json['quantite'] as int,
-      produitNom: json['produit_nom'] as String?,
-      produitCode: json['produit_code'] as String?,
+    final ridgePath = Path();
+    ridgePath.moveTo(0, size.height * 0.85);
+    ridgePath.cubicTo(
+      size.width * 0.28,
+      size.height * (0.35 + 0.12 * math.sin(waveSeed)),
+      size.width * 0.60,
+      size.height * (0.95 - 0.12 * math.cos(waveSeed)),
+      size.width,
+      size.height * 0.40,
     );
+    canvas.drawPath(ridgePath, strokePaint);
   }
-}
 
-// ---------------------------------------------------------------------
-// TOKENS DE DESIGN
-// ---------------------------------------------------------------------
-class K {
-  static const bg = Color(0xFFF5F7FA);
-  static const surface = Color(0xFFFFFFFF);
-  static const surfaceAlt = Color(0xFFECEFF1);
-  static const border = Color(0xFFCFD8DC);
-  static const primary = Color(0xFF455A64);
-  static const accent = Color(0xFF455A64);
-  static const accentSoft = Color(0x1A455A64);
-  static const textPrimary = Color(0xFF263238);
-  static const textMuted = Color(0xFF78909C);
-  static const success = Color(0xFF43A047);
-  static const danger = Color(0xFFE53935);
-  static const info = Color(0xFF1E88E5);
-  static const warning = Color(0xFFFB8C00);
-
-  static const Duration anim = Duration(milliseconds: 280);
-  static const double radius = 16.0;
-  static const double radiusSm = 10.0;
-  static const double radiusXs = 6.0;
-  static const double radiusXl = 20.0;
-
-  static BoxShadow get cardShadow => BoxShadow(
-        color: Colors.black.withOpacity(0.055),
-        blurRadius: 18,
-        spreadRadius: 0,
-        offset: const Offset(0, 4),
-      );
+  @override
+  bool shouldRepaint(covariant TransferMetricWavePainter oldDelegate) =>
+      oldDelegate.waveSeed != waveSeed;
 }

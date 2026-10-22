@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:tek_app/models/stock_model.dart';
 import 'package:tek_app/screens/stock/stock_transfers.dart';
+import '../models/transfert_model.dart';
 import '../models/user_model.dart';
 import '../models/product_model.dart';
 import '../models/depot_model.dart';
@@ -395,93 +396,117 @@ Future<Map<String, dynamic>> getSale(int id) async {
   }
 }
 
+  Future<List<dynamic>> getVentesARecuperer({String statut = 'en_attente'}) async {
+    final r = await http.get(
+      Uri.parse('${AppConfig.baseUrl}/ventes/a-recuperer?statut=$statut'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (r.statusCode == 200) return json.decode(r.body);
+    throw Exception('Erreur chargement stocks à récupérer (${r.statusCode})');
+  }
+
+  Future<dynamic> validerSortie(int venteId) async {
+    final r = await http.post(
+      Uri.parse('${AppConfig.baseUrl}/ventes/$venteId/valider-sortie'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (r.statusCode == 200) return json.decode(r.body);
+    throw Exception('Erreur validation sortie (${r.statusCode})');
+  }
+
+  Future<dynamic> annulerRetrait(int venteId) async {
+    final r = await http.post(
+      Uri.parse('${AppConfig.baseUrl}/ventes/$venteId/annuler-retrait'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (r.statusCode == 200) return json.decode(r.body);
+    throw Exception('Erreur annulation retrait (${r.statusCode})');
+  }
 // Dans admin_service.dart
 
 /// Crée une nouvelle vente
-Future<Map<String, dynamic>> createSale({
-  required int clientId,
-  required int depotSourceId,
-  required String dateVente,
-  required List<Map<String, dynamic>> lignes,
-  double remise = 0.0,
-  String modeLivraison = 'retrait_magasin',
-  String? notes,
-}) async {
-  try {
-    print('🛒 Création d\'une nouvelle vente...');
-    print('👤 Client: $clientId, Dépôt: $depotSourceId');
-    print('📦 ${lignes.length} produits');
-    
-    final body = {
-      'client_id': clientId,
-      'depot_source_id': depotSourceId,
-      'date_vente': dateVente,
-      'remise': remise.toString(),
-      'mode_livraison': modeLivraison,
-      'notes': notes,
-      'lignes': lignes,
-    };
+  Future<Map<String, dynamic>> createSale({
+    required int clientId,
+    required int depotSourceId,
+    required String dateVente,
+    required List<Map<String, dynamic>> lignes,
+    double remise = 0.0,
+    String modeLivraison = 'retrait_magasin',
+    String? notes,
+    String? dateRetrait,   // NOUVEAU : null = vente immédiate
+  }) async {
+    try {
+      print('🛒 Création d\'une nouvelle vente...');
+      print('👤 Client: $clientId, Dépôt: $depotSourceId');
+      print('📦 ${lignes.length} produits');
 
-    print('📤 Body: ${jsonEncode(body)}');
+      final body = <String, dynamic>{
+        'client_id': clientId,
+        'depot_source_id': depotSourceId,
+        'date_vente': dateVente,
+        'remise': remise,
+        'remise_type': 'pourcentage',
+        'mode_livraison': modeLivraison,
+        'notes': notes,
+        'lignes': lignes,
+        'type_vente': dateRetrait != null ? 'a_retirer' : 'normale',
+        if (dateRetrait != null) 'date_retrait': dateRetrait,
+      };
 
-    // ✅ Ajouter un slash à la fin de l'URL si nécessaire
-    final url = '${AppConfig.baseUrl}/ventes/';
-    print('📍 URL: $url');
+      print('📤 Body: ${jsonEncode(body)}');
 
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(body),
-    );
+      final url = '${AppConfig.baseUrl}/ventes/';
+      print('📍 URL: $url');
 
-    print('📡 Status Code: ${response.statusCode}');
-    print('📡 Response: ${response.body}');
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
 
-    // ✅ Gérer les redirections (307)
-    if (response.statusCode == 307) {
-      // Récupérer l'URL de redirection
-      final location = response.headers['location'];
-      print('🔄 Redirection vers: $location');
-      
-      if (location != null) {
-        // Suivre la redirection
-        final redirectResponse = await http.post(
-          Uri.parse(location),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode(body),
-        );
-        
-        print('📡 Redirect Status: ${redirectResponse.statusCode}');
-        print('📡 Redirect Response: ${redirectResponse.body}');
-        
-        if (redirectResponse.statusCode == 200 || redirectResponse.statusCode == 201) {
-          final data = json.decode(redirectResponse.body);
-          print('✅ Vente créée avec succès');
-          return data as Map<String, dynamic>;
-        } else {
-          throw Exception('Erreur lors de la création de la vente: ${redirectResponse.body}');
+      print('📡 Status Code: ${response.statusCode}');
+      print('📡 Response: ${response.body}');
+
+      // Gestion 307
+      if (response.statusCode == 307) {
+        final location = response.headers['location'];
+        print('🔄 Redirection vers: $location');
+        if (location != null) {
+          final redirectResponse = await http.post(
+            Uri.parse(location),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(body),
+          );
+          print('📡 Redirect Status: ${redirectResponse.statusCode}');
+          print('📡 Redirect Response: ${redirectResponse.body}');
+          if (redirectResponse.statusCode == 200 || redirectResponse.statusCode == 201) {
+            final data = json.decode(redirectResponse.body);
+            print('✅ Vente créée avec succès');
+            return data as Map<String, dynamic>;
+          } else {
+            throw Exception('Erreur lors de la création de la vente: ${redirectResponse.body}');
+          }
         }
       }
-    }
 
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      final data = json.decode(response.body);
-      print('✅ Vente créée avec succès');
-      return data as Map<String, dynamic>;
-    } else {
-      throw Exception('Erreur lors de la création de la vente: ${response.body}');
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+        print('✅ Vente créée avec succès');
+        return data as Map<String, dynamic>;
+      } else {
+        throw Exception('Erreur lors de la création de la vente: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Exception dans createSale: $e');
+      rethrow;
     }
-  } catch (e) {
-    print('❌ Exception dans createSale: $e');
-    rethrow;
   }
-}
 /// Enregistre un paiement pour une vente
 Future<Map<String, dynamic>> paySale(int id) async {
   try {
@@ -1399,6 +1424,75 @@ Future<bool> deleteUser(int id) async {
     }
   }
 
+  // ---------------------------------------------------------------------
+// FINANCE / CAISSE
+// ---------------------------------------------------------------------
+
+  Future<Map<String, dynamic>> getSoldeCaisse({String? dateRef}) async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/caisse/solde')
+        .replace(queryParameters: dateRef != null ? {'date_jour': dateRef} : null);
+    final r = await http.get(uri, headers: {'Authorization': 'Bearer $token'});
+    if (r.statusCode == 200) return json.decode(r.body);
+    throw Exception('Erreur solde caisse (${r.statusCode})');
+  }
+
+  Future<Map<String, dynamic>> createMouvementCaisse({
+    required String type, // 'entree' | 'sortie'
+    required double montant,
+    String? description,
+    String? categorie,
+  }) async {
+    final body = <String, dynamic>{
+      'type_mouvement': type,
+      'montant': montant,
+      if (description != null && description.isNotEmpty) 'description': description,
+      if (categorie != null) 'categorie': categorie,
+    };
+    final r = await http.post(
+      Uri.parse('${AppConfig.baseUrl}/caisse/mouvements'),
+      headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    if (r.statusCode == 201) return json.decode(r.body);
+    throw Exception('Erreur mouvement caisse: ${r.body}');
+  }
+
+  Future<List<dynamic>> getMouvementsCaisse({
+    String? dateDebut,
+    String? dateFin,
+    String? type,
+    int limit = 200,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (dateDebut != null) params['date_debut'] = dateDebut;
+    if (dateFin != null) params['date_fin'] = dateFin;
+    if (type != null) params['type_mouvement'] = type;
+    final uri = Uri.parse('${AppConfig.baseUrl}/caisse/mouvements')
+        .replace(queryParameters: params);
+    final r = await http.get(uri, headers: {'Authorization': 'Bearer $token'});
+    if (r.statusCode == 200) return json.decode(r.body);
+    throw Exception('Erreur mouvements (${r.statusCode})');
+  }
+
+  Future<Map<String, dynamic>> getRapportJournalierCaisse({String? dateJour}) async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/caisse/rapport/journalier')
+        .replace(queryParameters: dateJour != null ? {'date_jour': dateJour} : null);
+    final r = await http.get(uri, headers: {'Authorization': 'Bearer $token'});
+    if (r.statusCode == 200) return json.decode(r.body);
+    throw Exception('Erreur rapport journalier');
+  }
+
+  Future<Map<String, dynamic>> getRapportMensuelCaisse({
+    required int annee,
+    required int mois,
+  }) async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/caisse/rapport/mensuel')
+        .replace(queryParameters: {'annee': '$annee', 'mois': '$mois'});
+    final r = await http.get(uri, headers: {'Authorization': 'Bearer $token'});
+    if (r.statusCode == 200) return json.decode(r.body);
+    throw Exception('Erreur rapport mensuel');
+  }
+
   /// Supprime un produit
   Future<bool> deleteProduct(int id) async {
     final response = await http.delete(
@@ -1414,16 +1508,23 @@ Future<bool> deleteUser(int id) async {
   // ---------------------------------------------------------------------
 
   /// Récupère toutes les catégories
-  Future<List<dynamic>> getCategories() async {
+
+  Future<List<Map<String, dynamic>>> getCategories() async {
     final response = await http.get(
       Uri.parse('${AppConfig.baseUrl}/categories/'),
       headers: {'Authorization': 'Bearer $token'},
     );
 
     if (response.statusCode == 200) {
-      return json.decode(response.body);
+      final data = json.decode(response.body);
+      if (data is List) {
+        return data.map((e) => e as Map<String, dynamic>).toList();
+      }
+      return [];
+    } else if (response.statusCode == 404) {
+      return [];
     } else {
-      throw Exception('Erreur lors du chargement des catégories');
+      throw Exception('Erreur chargement catégories: ${response.statusCode}');
     }
   }
 
@@ -1453,19 +1554,25 @@ Future<bool> deleteUser(int id) async {
   // CLIENTS
   // ---------------------------------------------------------------------
 
-  /// Récupère tous les clients
-  Future<List<dynamic>> getClients() async {
+  Future<List<Map<String, dynamic>>> getClients() async {
     final response = await http.get(
       Uri.parse('${AppConfig.baseUrl}/clients/'),
       headers: {'Authorization': 'Bearer $token'},
     );
 
     if (response.statusCode == 200) {
-      return json.decode(response.body);
+      final data = json.decode(response.body);
+      if (data is List) {
+        return data.map((e) => e as Map<String, dynamic>).toList();
+      }
+      return [];
+    } else if (response.statusCode == 404) {
+      return [];
     } else {
-      throw Exception('Erreur lors du chargement des clients');
+      throw Exception('Erreur chargement clients: ${response.statusCode}');
     }
   }
+
 
   /// Crée un client
   Future<dynamic> createClient(Map<String, dynamic> data) async {
@@ -1518,16 +1625,22 @@ Future<bool> deleteUser(int id) async {
   // ---------------------------------------------------------------------
 
   /// Récupère tous les fournisseurs
-  Future<List<dynamic>> getFournisseurs() async {
+  Future<List<Map<String, dynamic>>> getFournisseurs() async {
     final response = await http.get(
-      Uri.parse('${AppConfig.baseUrl}/fournisseurs'),
+      Uri.parse('${AppConfig.baseUrl}/fournisseurs/'),  // ✅ slash ajouté
       headers: {'Authorization': 'Bearer $token'},
     );
 
     if (response.statusCode == 200) {
-      return json.decode(response.body);
+      final data = json.decode(response.body);
+      if (data is List) {
+        return data.map((e) => e as Map<String, dynamic>).toList();
+      }
+      return [];
+    } else if (response.statusCode == 404) {
+      return [];
     } else {
-      throw Exception('Erreur lors du chargement des fournisseurs');
+      throw Exception('Erreur chargement fournisseurs: ${response.statusCode}');
     }
   }
 

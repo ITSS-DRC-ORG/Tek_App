@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tek_app/models/user_model.dart';
-import 'package:tek_app/screens/admin/admin_components.dart';
+import 'package:tek_app/theme/app_theme.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../api/admin_service.dart';
 
@@ -12,17 +12,18 @@ class SettingsView extends StatefulWidget {
   State<SettingsView> createState() => _SettingsViewState();
 }
 
-class _SettingsViewState extends State<SettingsView> with SingleTickerProviderStateMixin {
+class _SettingsViewState extends State<SettingsView>
+    with SingleTickerProviderStateMixin {
   bool _isLoading = false;
   bool _notificationsEnabled = true;
   bool _darkModeEnabled = false;
   bool _autoBackupEnabled = true;
-  
+
   // Contrôleurs pour le profil
   final TextEditingController _nomCtrl = TextEditingController();
   final TextEditingController _prenomCtrl = TextEditingController();
   final TextEditingController _emailCtrl = TextEditingController();
-  
+
   // Animation
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -31,14 +32,14 @@ class _SettingsViewState extends State<SettingsView> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 240),
       vsync: this,
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
     _animationController.forward();
-    
+
     // Remplir les champs avec les données de l'utilisateur
     final user = Provider.of<AuthProvider>(context, listen: false).user;
     if (user != null) {
@@ -63,38 +64,48 @@ class _SettingsViewState extends State<SettingsView> with SingleTickerProviderSt
         content: Row(
           children: [
             Icon(
-              color == K.success ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+              color == const Color(0xFF107C41)
+                  ? Icons.check_circle_rounded
+                  : Icons.error_outline_rounded,
               color: Colors.white,
-              size: 20,
+              size: 18,
             ),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
           ],
         ),
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(K.radiusSm)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         duration: const Duration(seconds: 3),
       ),
     );
   }
 
-  // ---------------------------------------------------------------------
-  // UPDATE PROFIL
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // MISE À JOUR DU PROFIL (Inchangé)
+  // ---------------------------------------------------------------------------
   Future<void> _updateProfile() async {
     setState(() => _isLoading = true);
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final user = authProvider.user;
-      
+
       if (user == null) {
-        _showSnackBar('Utilisateur non connecté', K.danger);
+        _showSnackBar('Utilisateur non connecté', const Color(0xFFC42B1C));
         return;
       }
 
-      // Mise à jour via l'API
       final service = AdminService(user.token);
       final updatedUser = await service.updateProfile(
         nom: _nomCtrl.text.trim(),
@@ -103,23 +114,20 @@ class _SettingsViewState extends State<SettingsView> with SingleTickerProviderSt
       );
 
       if (!mounted) return;
-      
-      // Mettre à jour l'utilisateur dans le provider
+
       await authProvider.updateUser(updatedUser);
-      
-      _showSnackBar('Profil mis à jour avec succès !', K.success);
-      
+      _showSnackBar('Profil mis à jour avec succès !', const Color(0xFF107C41));
     } catch (e) {
       if (!mounted) return;
-      _showSnackBar('Erreur: ${e.toString()}', K.danger);
+      _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // ---------------------------------------------------------------------
-  // CHANGE PASSWORD
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // CHANGEMENT DE MOT DE PASSE (Modale Windows 11 Fluent)
+  // ---------------------------------------------------------------------------
   void _showChangePasswordDialog() {
     final TextEditingController oldPassCtrl = TextEditingController();
     final TextEditingController newPassCtrl = TextEditingController();
@@ -132,88 +140,111 @@ class _SettingsViewState extends State<SettingsView> with SingleTickerProviderSt
       context: context,
       barrierDismissible: true,
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
+        builder: (context, setStateDialog) {
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(K.radiusXl)),
+            backgroundColor: const Color(0xFFFFFFFF),
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 12),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+            actionsPadding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
             title: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: K.info.withOpacity(0.1),
-                    shape: BoxShape.circle,
+                    color: const Color(0xFFE8F2FB),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.lock_rounded, color: K.info, size: 24),
+                  child: const Icon(
+                    Icons.lock_outline_rounded,
+                    color: Color(0xFF0067C0),
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 12),
-                const Text('Changer le mot de passe'),
+                const Text(
+                  'Sécurité du compte',
+                  style: TextStyle(
+                    fontFamily: kAppFontFamily,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
               ],
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: oldPassCtrl,
-                  obscureText: obscureOld,
-                  decoration: InputDecoration(
-                    labelText: 'Mot de passe actuel',
-                    prefixIcon: const Icon(Icons.lock_outline_rounded),
-                    suffixIcon: IconButton(
-                      icon: Icon(obscureOld ? Icons.visibility_off : Icons.visibility),
-                      onPressed: () => setState(() => obscureOld = !obscureOld),
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(K.radiusSm),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Modifiez votre mot de passe d\'accès à votre session de travail.',
+                    style: TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w400,
+                      color: Color(0xFF64748B),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: newPassCtrl,
-                  obscureText: obscureNew,
-                  decoration: InputDecoration(
-                    labelText: 'Nouveau mot de passe',
-                    prefixIcon: const Icon(Icons.lock_outline_rounded),
-                    suffixIcon: IconButton(
-                      icon: Icon(obscureNew ? Icons.visibility_off : Icons.visibility),
-                      onPressed: () => setState(() => obscureNew = !obscureNew),
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(K.radiusSm),
-                    ),
+                  const SizedBox(height: 18),
+
+                  _buildDialogPasswordField(
+                    controller: oldPassCtrl,
+                    label: 'MOT DE PASSE ACTUEL',
+                    hint: '••••••••',
+                    obscure: obscureOld,
+                    onToggle: () => setStateDialog(() => obscureOld = !obscureOld),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: confirmPassCtrl,
-                  obscureText: obscureConfirm,
-                  decoration: InputDecoration(
-                    labelText: 'Confirmer le mot de passe',
-                    prefixIcon: const Icon(Icons.lock_outline_rounded),
-                    suffixIcon: IconButton(
-                      icon: Icon(obscureConfirm ? Icons.visibility_off : Icons.visibility),
-                      onPressed: () => setState(() => obscureConfirm = !obscureConfirm),
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(K.radiusSm),
-                    ),
+                  const SizedBox(height: 12),
+
+                  _buildDialogPasswordField(
+                    controller: newPassCtrl,
+                    label: 'NOUVEAU MOT DE PASSE',
+                    hint: 'Au moins 6 caractères',
+                    obscure: obscureNew,
+                    onToggle: () => setStateDialog(() => obscureNew = !obscureNew),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+
+                  _buildDialogPasswordField(
+                    controller: confirmPassCtrl,
+                    label: 'CONFIRMER LE MOT DE PASSE',
+                    hint: '••••••••',
+                    obscure: obscureConfirm,
+                    onToggle: () => setStateDialog(() => obscureConfirm = !obscureConfirm),
+                  ),
+                ],
+              ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Annuler', style: TextStyle(color: K.textMuted)),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF475569),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+                child: const Text(
+                  'Annuler',
+                  style: TextStyle(
+                    fontFamily: kAppFontFamily,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
+                  ),
+                ),
               ),
               ElevatedButton(
-                onPressed: () async {
+                onPressed: _isLoading
+                    ? null
+                    : () async {
                   if (newPassCtrl.text != confirmPassCtrl.text) {
-                    _showSnackBar('Les mots de passe ne correspondent pas', K.danger);
+                    _showSnackBar('Les mots de passe ne correspondent pas', const Color(0xFFC42B1C));
                     return;
                   }
                   if (newPassCtrl.text.length < 6) {
-                    _showSnackBar('Le mot de passe doit contenir au moins 6 caractères', K.danger);
+                    _showSnackBar('Le mot de passe doit contenir au moins 6 caractères', const Color(0xFFC42B1C));
                     return;
                   }
 
@@ -230,37 +261,44 @@ class _SettingsViewState extends State<SettingsView> with SingleTickerProviderSt
                     );
 
                     if (!mounted) return;
-                    
+
                     if (success) {
                       Navigator.pop(context);
-                      _showSnackBar('Mot de passe modifié avec succès !', K.success);
+                      _showSnackBar('Mot de passe modifié avec succès !', const Color(0xFF107C41));
                     } else {
-                      _showSnackBar('Erreur lors du changement de mot de passe', K.danger);
+                      _showSnackBar('Erreur lors du changement de mot de passe', const Color(0xFFC42B1C));
                     }
                   } catch (e) {
                     if (!mounted) return;
-                    _showSnackBar('Erreur: ${e.toString()}', K.danger);
+                    _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
                   } finally {
                     if (mounted) setState(() => _isLoading = false);
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: K.primary,
+                  backgroundColor: const Color(0xFF0067C0),
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(K.radiusSm),
-                  ),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 child: _isLoading
                     ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation(Colors.white),
-                        ),
-                      )
-                    : const Text('Changer le mot de passe'),
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation(Colors.white),
+                  ),
+                )
+                    : const Text(
+                  'Enregistrer le mot de passe',
+                  style: TextStyle(
+                    fontFamily: kAppFontFamily,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
               ),
             ],
           );
@@ -269,70 +307,107 @@ class _SettingsViewState extends State<SettingsView> with SingleTickerProviderSt
     );
   }
 
-  // ---------------------------------------------------------------------
-  // EXPORT DATA
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // EXPORT DE DONNÉES (Dialogue Desktop Windows 11)
+  // ---------------------------------------------------------------------------
   void _showExportOptions() {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(K.radiusXl)),
-      ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFFFFFF),
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+        actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
+        title: Row(
           children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F2FB),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.file_download_outlined,
+                color: Color(0xFF0067C0),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
             const Text(
               'Exporter les données',
               style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: K.textPrimary,
+                fontFamily: kAppFontFamily,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
               ),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Choisissez le format d\'exportation',
-              style: TextStyle(color: K.textMuted),
-            ),
-            const SizedBox(height: 20),
-            _buildExportOption(
-              icon: Icons.picture_as_pdf_rounded,
-              title: 'PDF',
-              subtitle: 'Export en format PDF',
-              color: K.danger,
-              onTap: () {
-                Navigator.pop(context);
-                _showSnackBar('Export PDF en cours...', K.info);
-              },
-            ),
-            const Divider(height: 1),
-            _buildExportOption(
-              icon: Icons.table_chart_rounded,
-              title: 'Excel',
-              subtitle: 'Export en format Excel (XLSX)',
-              color: K.success,
-              onTap: () {
-                Navigator.pop(context);
-                _showSnackBar('Export Excel en cours...', K.info);
-              },
-            ),
-            const Divider(height: 1),
-            _buildExportOption(
-              icon: Icons.text_snippet_rounded,
-              title: 'CSV',
-              subtitle: 'Export en format CSV',
-              color: K.info,
-              onTap: () {
-                Navigator.pop(context);
-                _showSnackBar('Export CSV en cours...', K.info);
-              },
-            ),
-            const SizedBox(height: 12),
           ],
         ),
+        content: SizedBox(
+          width: 440,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Sélectionnez le format d\'exportation des tables du catalogue et des ventes :',
+                style: TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w400,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildExportOption(
+                icon: Icons.picture_as_pdf_outlined,
+                title: 'Format PDF (.pdf)',
+                subtitle: 'Rapports et états de stocks prêts pour impression',
+                onTap: () {
+                  Navigator.pop(context);
+                  _showSnackBar('Génération du rapport PDF en cours...', const Color(0xFF0067C0));
+                },
+              ),
+              const SizedBox(height: 8),
+              _buildExportOption(
+                icon: Icons.table_chart_outlined,
+                title: 'Classeur Excel (.xlsx)',
+                subtitle: 'Tableaux complets avec colonnes et données brutes',
+                onTap: () {
+                  Navigator.pop(context);
+                  _showSnackBar('Export Excel généré avec succès', const Color(0xFF107C41));
+                },
+              ),
+              const SizedBox(height: 8),
+              _buildExportOption(
+                icon: Icons.receipt_long_outlined,
+                title: 'Fichier Délimité (.csv)',
+                subtitle: 'Données tabulaires universelles compatibles ERP',
+                onTap: () {
+                  Navigator.pop(context);
+                  _showSnackBar('Export CSV en cours...', const Color(0xFF0067C0));
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Fermer',
+              style: TextStyle(
+                fontFamily: kAppFontFamily,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF64748B),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -341,271 +416,244 @@ class _SettingsViewState extends State<SettingsView> with SingleTickerProviderSt
     required IconData icon,
     required String title,
     required String subtitle,
-    required Color color,
     required VoidCallback onTap,
   }) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(K.radiusSm),
-        ),
-        child: Icon(icon, color: color),
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0x12000000)),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-      trailing: const Icon(Icons.chevron_right_rounded, color: K.textMuted),
-      onTap: onTap,
+      child: ListTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8F2FB),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(icon, color: const Color(0xFF0067C0), size: 18),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontFamily: kAppFontFamily,
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(
+            fontFamily: kAppFontFamily,
+            fontSize: 11.5,
+            color: Color(0xFF64748B),
+          ),
+        ),
+        trailing: const Icon(Icons.arrow_forward_rounded, color: Color(0xFF94A3B8), size: 16),
+        onTap: onTap,
+      ),
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // BUILD PRINCIPAL
+  // ---------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
-    final isWide = MediaQuery.of(context).size.width >= 900;
+    final isWide = MediaQuery.of(context).size.width >= 960;
 
     return FadeTransition(
       opacity: _fadeAnimation,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.only(bottom: 32),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // EN-TÊTE DE PAGE
             Row(
               children: [
-                const Text(
-                  "Paramètres Généraux",
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: K.textPrimary,
-                  ),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Paramètres Généraux",
+                      style: TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0F172A),
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      "Gestion du profil, préférences de l'espace de travail et configuration système",
+                      style: TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w400,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
                 ),
                 const Spacer(),
-                if (isWide)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: K.success.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(K.radiusXl),
-                      border: Border.all(color: K.success.withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: K.success,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Système opérationnel',
-                          style: TextStyle(color: K.success, fontSize: 12, fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
+                // Badge opérationnel sobre
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE6F4EA),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0x15107C41)),
                   ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF107C41),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Système opérationnel',
+                        style: TextStyle(
+                          fontFamily: kAppFontFamily,
+                          color: Color(0xFF107C41),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 25),
+            const SizedBox(height: 22),
 
-            // Section Profil
-            _buildSectionTitle("Mon Profil", Icons.person_rounded),
+            // 1. SECTION PROFIL
+            _buildSectionHeader("Mon Profil Utilisateur", Icons.person_outline_rounded),
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                color: K.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: K.border),
-                boxShadow: [K.cardShadow],
+                color: const Color(0xFFFFFFFF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0x18000000), width: 1),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
               child: isWide
-                  ? _buildProfileDesktop(user)
-                  : _buildProfileMobile(user),
+                  ? _buildProfileDesktopLayout(user)
+                  : _buildProfileMobileLayout(user),
             ),
+            const SizedBox(height: 24),
 
-            const SizedBox(height: 30),
-
-            // Section Application
-            _buildSectionTitle("Configuration Système", Icons.settings_rounded),
-            _buildSettingTile(
-              icon: Icons.business_rounded,
-              title: "Informations Quincaillerie",
-              subtitle: "Nom, adresse, numéro de contribuable, logo",
-              onTap: () {
-                _showSnackBar('Ouverture des informations quincaillerie...', K.info);
-              },
-            ),
-            _buildSettingTile(
-              icon: Icons.print_rounded,
-              title: "Imprimantes & Facturation",
-              subtitle: "Configurer les imprimantes thermiques et format PDF",
-              onTap: () {
-                _showSnackBar('Ouverture de la configuration des imprimantes...', K.info);
-              },
-            ),
-            _buildSettingTile(
-              icon: Icons.storage_rounded,
-              title: "Base de données",
-              subtitle: "État de la connexion et sauvegardes",
-              onTap: () {
-                _showSnackBar('Vérification de la base de données...', K.info);
-              },
-            ),
-            
-            const SizedBox(height: 20),
-
-            // Section Préférences
-            _buildSectionTitle("Préférences", Icons.tune_rounded),
+            // 2. CONFIGURATION SYSTÈME
+            _buildSectionHeader("Configuration Système", Icons.settings_outlined),
             Container(
-              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: K.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: K.border),
-                boxShadow: [K.cardShadow],
+                color: const Color(0xFFFFFFFF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0x18000000), width: 1),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
+              clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text(
-                      'Notifications',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    subtitle: const Text('Recevoir des alertes et notifications'),
-                    value: _notificationsEnabled,
-                    activeColor: K.info,
-                    onChanged: (value) => setState(() => _notificationsEnabled = value),
+                  _buildSettingRow(
+                    icon: Icons.storefront_outlined,
+                    title: "Informations de l'Entreprise",
+                    subtitle: "Raison sociale, adresse, identifiant fiscal, devises et logo",
+                    onTap: () => _showSnackBar('Ouverture des informations de l\'entreprise...', const Color(0xFF0067C0)),
                   ),
-                  const Divider(height: 20),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text(
-                      'Mode sombre',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    subtitle: const Text('Activer le thème sombre'),
-                    value: _darkModeEnabled,
-                    activeColor: K.primary,
-                    onChanged: (value) => setState(() => _darkModeEnabled = value),
+                  const Divider(height: 1, thickness: 1, color: Color(0x12000000)),
+                  _buildSettingRow(
+                    icon: Icons.print_outlined,
+                    title: "Imprimantes & Reçus de Caisse",
+                    subtitle: "Configuration des imprimantes thermiques (ESC/POS) et formats de tickets",
+                    onTap: () => _showSnackBar('Configuration des imprimantes...', const Color(0xFF0067C0)),
                   ),
-                  const Divider(height: 20),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text(
-                      'Sauvegarde automatique',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    subtitle: const Text('Sauvegarder automatiquement les données'),
-                    value: _autoBackupEnabled,
-                    activeColor: K.success,
-                    onChanged: (value) => setState(() => _autoBackupEnabled = value),
+                  const Divider(height: 1, thickness: 1, color: Color(0x12000000)),
+                  _buildSettingRow(
+                    icon: Icons.dns_outlined,
+                    title: "Base de Données & Maintenance",
+                    subtitle: "État de la synchronisation, sauvegarde locale et archivage",
+                    onTap: () => _showSnackBar('Vérification de la base de données...', const Color(0xFF0067C0)),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 24),
 
-            const SizedBox(height: 30),
-
-            // Boutons d'action
+            // 4. ACTIONS GLOBALES & DÉCONNEXION
             Row(
               children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _updateProfile,
-                    icon: _isLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation(Colors.white),
-                            ),
-                          )
-                        : const Icon(Icons.save_rounded),
-                    label: Text(_isLoading ? 'Enregistrement...' : 'Enregistrer les modifications'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: K.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(K.radiusSm),
-                      ),
+                OutlinedButton.icon(
+                  onPressed: _showExportOptions,
+                  icon: const Icon(Icons.file_download_outlined, size: 17),
+                  label: const Text('Exporter les données'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0F172A),
+                    side: const BorderSide(color: Color(0x20000000)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    textStyle: const TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _showChangePasswordDialog,
-                    icon: const Icon(Icons.lock_outline_rounded),
-                    label: const Text('Changer le mot de passe'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      side: const BorderSide(color: K.border),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(K.radiusSm),
-                      ),
+
+                OutlinedButton.icon(
+                  onPressed: _showChangePasswordDialog,
+                  icon: const Icon(Icons.lock_outline_rounded, size: 16),
+                  label: const Text('Mot de passe'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0F172A),
+                    side: const BorderSide(color: Color(0x20000000)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    textStyle: const TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
+
               ],
             ),
-            
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _showExportOptions,
-                    icon: const Icon(Icons.download_rounded),
-                    label: const Text('Exporter les données'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      side: const BorderSide(color: K.border),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(K.radiusSm),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => authProvider.logout(),
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text("Déconnexion"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: K.danger,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(K.radiusSm),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            // Footer
+            // MENTION DE VERSION DISCRÈTE
             Center(
               child: Text(
-                "TEK'app v1.0.0 • Tous droits réservés © ${DateTime.now().year}",
+                "TEK'app • Écosystème de Gestion Commerciale © ${DateTime.now().year}",
                 style: const TextStyle(
-                  color: K.textMuted,
-                  fontSize: 12,
+                  fontFamily: kAppFontFamily,
+                  color: Color(0xFF94A3B8),
+                  fontSize: 11.5,
                 ),
               ),
             ),
@@ -615,130 +663,104 @@ class _SettingsViewState extends State<SettingsView> with SingleTickerProviderSt
     );
   }
 
-  // ---------------------------------------------------------------------
-  // WIDGETS D'AIDE
-  // ---------------------------------------------------------------------
-  Widget _buildSectionTitle(String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12, left: 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: K.primary),
-          const SizedBox(width: 10),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: K.textMuted,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProfileDesktop(UserModel? user) {
-    return Row(
+  // ---------------------------------------------------------------------------
+  // SECTION PROFIL DESKTOP
+  // ---------------------------------------------------------------------------
+  Widget _buildProfileDesktopLayout(UserModel? user) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CircleAvatar(
-          radius: 50,
-          backgroundColor: K.primary,
-          child: Text(
-            user?.username[0].toUpperCase() ?? "A",
-            style: const TextStyle(fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-        ),
-        const SizedBox(width: 25),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                user?.nom ?? "Administrateur",
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: K.textPrimary),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Colonne 1 : Carte d'identité du compte
+            Container(
+              width: 210,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0x12000000)),
               ),
-              const SizedBox(height: 4),
-              Row(
+              child: Column(
                 children: [
-                  const Icon(Icons.email_rounded, color: K.textMuted, size: 16),
-                  const SizedBox(width: 6),
+                  CircleAvatar(
+                    radius: 34,
+                    backgroundColor: const Color(0xFFE8F2FB),
+                    child: Text(
+                      user?.username.isNotEmpty == true ? user!.username[0].toUpperCase() : 'A',
+                      style: const TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontSize: 24,
+                        color: Color(0xFF0067C0),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Text(
-                    user?.email ?? "admin@sgqg.com",
-                    style: const TextStyle(color: K.textMuted, fontSize: 14),
+                    user?.username ?? 'Utilisateur',
+                    style: const TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14.5,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F2FB),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      user?.role.label.toUpperCase() ?? 'ADMINISTRATEUR',
+                      style: const TextStyle(
+                        fontFamily: kAppFontFamily,
+                        color: Color(0xFF0067C0),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: K.accentSoft,
-                  borderRadius: BorderRadius.circular(K.radiusXl),
-                ),
-                child: Text(
-                  "Rôle : ${user?.role.label ?? 'Administrateur'}",
-                  style: const TextStyle(color: K.primary, fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Spacer(),
-        OutlinedButton.icon(
-          onPressed: _updateProfile,
-          icon: const Icon(Icons.edit_rounded),
-          label: const Text("Modifier le profil"),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            side: const BorderSide(color: K.border),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(K.radiusSm),
             ),
-          ),
-        ),
-      ],
-    );
-  }
+            const SizedBox(width: 24),
 
-  Widget _buildProfileMobile(UserModel? user) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            CircleAvatar(
-              radius: 40,
-              backgroundColor: K.primary,
-              child: Text(
-                user?.username[0].toUpperCase() ?? "A",
-                style: const TextStyle(fontSize: 28, color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(width: 16),
+            // Colonne 2 : Champs de profil
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    user?.nom ?? "Administrateur",
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: K.textPrimary),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildProfileInput(
+                          controller: _prenomCtrl,
+                          label: 'PRÉNOM',
+                          hint: 'Votre prénom',
+                          icon: Icons.person_outline_rounded,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: _buildProfileInput(
+                          controller: _nomCtrl,
+                          label: 'NOM',
+                          hint: 'Votre nom',
+                          icon: Icons.badge_outlined,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    user?.email ?? "admin@sgqg.com",
-                    style: const TextStyle(color: K.textMuted, fontSize: 13),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: K.accentSoft,
-                      borderRadius: BorderRadius.circular(K.radiusXl),
-                    ),
-                    child: Text(
-                      "Rôle : ${user?.role.label ?? 'Administrateur'}",
-                      style: const TextStyle(color: K.primary, fontSize: 11, fontWeight: FontWeight.w600),
-                    ),
+                  const SizedBox(height: 14),
+                  _buildProfileInput(
+                    controller: _emailCtrl,
+                    label: 'ADRESSE EMAIL',
+                    hint: 'adresse@entreprise.com',
+                    icon: Icons.email_outlined,
                   ),
                 ],
               ),
@@ -746,18 +768,91 @@ class _SettingsViewState extends State<SettingsView> with SingleTickerProviderSt
           ],
         ),
         const SizedBox(height: 16),
+        const Divider(height: 1, thickness: 1, color: Color(0x12000000)),
+        const SizedBox(height: 14),
+
+        // Bouton de sauvegarde au fond à droite
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            ElevatedButton.icon(
+              onPressed: _isLoading ? null : _updateProfile,
+              icon: _isLoading
+                  ? const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(Colors.white),
+                ),
+              )
+                  : const Icon(Icons.check_rounded, size: 16),
+              label: Text(_isLoading ? 'Enregistrement...' : 'Enregistrer le profil'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0067C0),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                textStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProfileMobileLayout(UserModel? user) {
+    return Column(
+      children: [
+        CircleAvatar(
+          radius: 32,
+          backgroundColor: const Color(0xFFE8F2FB),
+          child: Text(
+            user?.username.isNotEmpty == true ? user!.username[0].toUpperCase() : 'A',
+            style: const TextStyle(
+              fontFamily: kAppFontFamily,
+              fontSize: 22,
+              color: Color(0xFF0067C0),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          user?.username ?? 'Utilisateur',
+          style: const TextStyle(
+            fontFamily: kAppFontFamily,
+            fontWeight: FontWeight.w700,
+            fontSize: 15,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+        const SizedBox(height: 14),
+        _buildProfileInput(controller: _prenomCtrl, label: 'PRÉNOM', hint: 'Prénom', icon: Icons.person_outline_rounded),
+        const SizedBox(height: 10),
+        _buildProfileInput(controller: _nomCtrl, label: 'NOM', hint: 'Nom', icon: Icons.badge_outlined),
+        const SizedBox(height: 10),
+        _buildProfileInput(controller: _emailCtrl, label: 'EMAIL', hint: 'Email', icon: Icons.email_outlined),
+        const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _updateProfile,
-            icon: const Icon(Icons.edit_rounded),
-            label: const Text("Modifier le profil"),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              side: const BorderSide(color: K.border),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(K.radiusSm),
-              ),
+          height: 38,
+          child: ElevatedButton(
+            onPressed: _isLoading ? null : _updateProfile,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0067C0),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text(
+              'Enregistrer le profil',
+              style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700),
             ),
           ),
         ),
@@ -765,33 +860,192 @@ class _SettingsViewState extends State<SettingsView> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildSettingTile({
+  // ---------------------------------------------------------------------------
+  // WIDGETS D'AIDE
+  // ---------------------------------------------------------------------------
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: const Color(0xFF0067C0)),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: const TextStyle(
+              fontFamily: kAppFontFamily,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0F172A),
+              letterSpacing: -0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileInput({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: kAppFontFamily,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF475569),
+            letterSpacing: 0.6,
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          style: const TextStyle(
+            fontFamily: kAppFontFamily,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF0F172A),
+          ),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(
+              fontFamily: kAppFontFamily,
+              color: Color(0xFFA0AEC0),
+              fontSize: 12.5,
+            ),
+            prefixIcon: Icon(icon, color: const Color(0xFF64748B), size: 18),
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            contentPadding: const EdgeInsets.symmetric(vertical: 11, horizontal: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDialogPasswordField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required bool obscure,
+    required VoidCallback onToggle,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: kAppFontFamily,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF475569),
+            letterSpacing: 0.6,
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          obscureText: obscure,
+          style: const TextStyle(
+            fontFamily: kAppFontFamily,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF0F172A),
+          ),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(
+              fontFamily: kAppFontFamily,
+              color: Color(0xFFA0AEC0),
+              fontSize: 12.5,
+            ),
+            prefixIcon: const Icon(Icons.lock_outline_rounded, color: Color(0xFF64748B), size: 18),
+            suffixIcon: IconButton(
+              splashRadius: 14,
+              icon: Icon(
+                obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                size: 17,
+                color: const Color(0xFF64748B),
+              ),
+              onPressed: onToggle,
+            ),
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            contentPadding: const EdgeInsets.symmetric(vertical: 11, horizontal: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSettingRow({
     required IconData icon,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
   }) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: K.border),
-      ),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: K.bg,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: K.primary),
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+      hoverColor: const Color(0xFFF8FAFC),
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE8F2FB),
+          borderRadius: BorderRadius.circular(8),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(subtitle, style: const TextStyle(fontSize: 13)),
-        trailing: const Icon(Icons.chevron_right_rounded, color: K.textMuted),
-        onTap: onTap,
+        child: Icon(icon, color: const Color(0xFF0067C0), size: 19),
       ),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontFamily: kAppFontFamily,
+          fontWeight: FontWeight.w700,
+          fontSize: 13.5,
+          color: Color(0xFF0F172A),
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(
+          fontFamily: kAppFontFamily,
+          fontSize: 12,
+          color: Color(0xFF64748B),
+        ),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8), size: 18),
+      onTap: onTap,
     );
   }
 }
