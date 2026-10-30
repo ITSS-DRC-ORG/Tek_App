@@ -62,8 +62,12 @@ class _FinanceViewState extends State<FinanceView> {
     return _mouvements.where((m) {
       final desc = (m['description'] ?? '').toString().toLowerCase();
       final cat = (m['categorie'] ?? '').toString().toLowerCase();
-      final date = (m['date_mouvement'] ?? '').toString().toLowerCase();
-      return desc.contains(query) || cat.contains(query) || date.contains(query);
+      final date = (m['created_at'] ?? m['date_mouvement'] ?? '')
+          .toString()
+          .toLowerCase();
+      return desc.contains(query) ||
+          cat.contains(query) ||
+          date.contains(query);
     }).toList();
   }
 
@@ -121,7 +125,8 @@ class _FinanceViewState extends State<FinanceView> {
           return AlertDialog(
             backgroundColor: Colors.white,
             surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             titlePadding: const EdgeInsets.fromLTRB(24, 20, 20, 14),
             contentPadding: const EdgeInsets.symmetric(horizontal: 24),
             actionsPadding: const EdgeInsets.fromLTRB(24, 14, 24, 18),
@@ -130,12 +135,18 @@ class _FinanceViewState extends State<FinanceView> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: isSortie ? const Color(0xFFFEE2E2) : const Color(0xFFE6F4EA),
+                    color: isSortie
+                        ? const Color(0xFFFEE2E2)
+                        : const Color(0xFFE6F4EA),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
-                    isSortie ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                    color: isSortie ? const Color(0xFFC42B1C) : const Color(0xFF107C41),
+                    isSortie
+                        ? Icons.arrow_upward_rounded
+                        : Icons.arrow_downward_rounded,
+                    color: isSortie
+                        ? const Color(0xFFC42B1C)
+                        : const Color(0xFF107C41),
                     size: 20,
                   ),
                 ),
@@ -145,7 +156,9 @@ class _FinanceViewState extends State<FinanceView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        isSortie ? 'Sortie de caisse (Décaissement)' : 'Entrée de caisse (Encaissement)',
+                        isSortie
+                            ? 'Sortie de caisse (Décaissement)'
+                            : 'Entrée de caisse (Encaissement)',
                         style: const TextStyle(
                           fontFamily: kAppFontFamily,
                           fontSize: 16,
@@ -172,7 +185,8 @@ class _FinanceViewState extends State<FinanceView> {
                   splashRadius: 16,
                   icon: const Icon(Icons.close_rounded, size: 19),
                   color: const Color(0xFF64748B),
-                  onPressed: isSaving ? null : () => Navigator.of(dialogCtx).pop(),
+                  onPressed:
+                  isSaving ? null : () => Navigator.of(dialogCtx).pop(),
                 ),
               ],
             ),
@@ -184,12 +198,14 @@ class _FinanceViewState extends State<FinanceView> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Divider(height: 1, thickness: 1, color: Color(0x14000000)),
+                    const Divider(
+                        height: 1, thickness: 1, color: Color(0x14000000)),
                     const SizedBox(height: 16),
 
                     if (isSortie) ...[
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFEF3C7),
                           borderRadius: BorderRadius.circular(8),
@@ -197,7 +213,8 @@ class _FinanceViewState extends State<FinanceView> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFD97706)),
+                            const Icon(Icons.info_outline_rounded,
+                                size: 16, color: Color(0xFFD97706)),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
@@ -216,11 +233,13 @@ class _FinanceViewState extends State<FinanceView> {
                       const SizedBox(height: 14),
                     ],
 
-                    _buildDialogFieldLabel("MONTANT DU MOUVEMENT (\$)", isRequired: true),
+                    _buildDialogFieldLabel("MONTANT DU MOUVEMENT (\$)",
+                        isRequired: true),
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: montantCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                       style: const TextStyle(
                         fontFamily: kAppFontFamily,
                         fontSize: 14,
@@ -232,7 +251,9 @@ class _FinanceViewState extends State<FinanceView> {
                         icon: Icons.attach_money_rounded,
                       ),
                       validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Le montant est requis';
+                        if (v == null || v.trim().isEmpty) {
+                          return 'Le montant est requis';
+                        }
                         final val = double.tryParse(v.trim());
                         if (val == null || val <= 0) return 'Montant invalide';
                         if (isSortie && val > _solde) {
@@ -255,7 +276,9 @@ class _FinanceViewState extends State<FinanceView> {
                         color: Color(0xFF0F172A),
                       ),
                       decoration: _buildDialogInputDecoration(
-                        hint: isSortie ? 'ex: Dépense carburant, achat fournitures...' : 'ex: Apport personnel, fond de caisse...',
+                        hint: isSortie
+                            ? 'ex: Dépense carburant, achat fournitures...'
+                            : 'ex: Apport personnel, fond de caisse...',
                         icon: Icons.notes_rounded,
                       ),
                     ),
@@ -266,31 +289,41 @@ class _FinanceViewState extends State<FinanceView> {
             ),
             actions: [
               TextButton(
-                onPressed: isSaving ? null : () => Navigator.of(dialogCtx).pop(),
+                onPressed:
+                isSaving ? null : () => Navigator.of(dialogCtx).pop(),
                 style: TextButton.styleFrom(
                   foregroundColor: const Color(0xFF475569),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
                 ),
-                child: const Text('Annuler', style: TextStyle(fontFamily: kAppFontFamily, fontSize: 13)),
+                child: const Text('Annuler',
+                    style:
+                    TextStyle(fontFamily: kAppFontFamily, fontSize: 13)),
               ),
               ElevatedButton(
                 onPressed: isSaving
                     ? null
                     : () async {
                   if (!formKey.currentState!.validate()) return;
-                  final montant = double.tryParse(montantCtrl.text.trim()) ?? 0;
+                  final montant =
+                      double.tryParse(montantCtrl.text.trim()) ?? 0;
                   setDialogState(() => isSaving = true);
                   try {
-                    final user = Provider.of<AuthProvider>(context, listen: false).user;
+                    final user = Provider.of<AuthProvider>(context,
+                        listen: false)
+                        .user;
                     if (user == null) return;
                     await AdminService(user.token).createMouvementCaisse(
                       type: type,
                       montant: montant,
-                      description: descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(),
+                      description: descCtrl.text.trim().isEmpty
+                          ? null
+                          : descCtrl.text.trim(),
                     );
                     if (!mounted) return;
                     Navigator.of(dialogCtx).pop();
-                    _snack('Mouvement de caisse validé', const Color(0xFF107C41));
+                    _snack('Mouvement de caisse validé',
+                        const Color(0xFF107C41));
                     await _load();
                   } catch (e) {
                     setDialogState(() => isSaving = false);
@@ -299,20 +332,27 @@ class _FinanceViewState extends State<FinanceView> {
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isSortie ? const Color(0xFFC42B1C) : const Color(0xFF107C41),
+                  backgroundColor: isSortie
+                      ? const Color(0xFFC42B1C)
+                      : const Color(0xFF107C41),
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
                 child: isSaving
                     ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
                 )
                     : Text(
-                  isSortie ? 'Valider le décaissement' : 'Valider l\'encaissement',
+                  isSortie
+                      ? 'Valider le décaissement'
+                      : 'Valider l\'encaissement',
                   style: const TextStyle(
                     fontFamily: kAppFontFamily,
                     fontWeight: FontWeight.w700,
@@ -341,7 +381,8 @@ class _FinanceViewState extends State<FinanceView> {
       final now = DateTime.now();
 
       final rapport = mensuel
-          ? await service.getRapportMensuelCaisse(annee: now.year, mois: now.month)
+          ? await service.getRapportMensuelCaisse(
+          annee: now.year, mois: now.month)
           : await service.getRapportJournalierCaisse();
 
       final soldeOuverture = _parseNum(rapport['solde_ouverture']);
@@ -352,7 +393,7 @@ class _FinanceViewState extends State<FinanceView> {
       final mouvements = (rapport['mouvements'] as List?) ?? [];
       final rows = <List<String>>[];
       for (final m in mouvements) {
-        final date = _formatDate(m['date_mouvement']);
+        final date = _formatDate(m['created_at'] ?? m['date_mouvement']);
         final type = m['type_mouvement'] == 'entree' ? 'Entrée' : 'Sortie';
         final montant = _parseNum(m['montant']);
         final desc = (m['description'] ?? m['categorie'] ?? '—').toString();
@@ -368,10 +409,22 @@ class _FinanceViewState extends State<FinanceView> {
         {
           'title': 'Synthèse Financière de Caisse',
           'items': [
-            {'label': 'Solde d\'ouverture', 'value': '${soldeOuverture.toStringAsFixed(2)} \$'},
-            {'label': 'Total des entrées', 'value': '+ ${totalEntrees.toStringAsFixed(2)} \$'},
-            {'label': 'Total des sorties', 'value': '- ${totalSorties.toStringAsFixed(2)} \$'},
-            {'label': 'Solde net de clôture', 'value': '${soldeCloture.toStringAsFixed(2)} \$'},
+            {
+              'label': 'Solde d\'ouverture',
+              'value': '${soldeOuverture.toStringAsFixed(2)} \$'
+            },
+            {
+              'label': 'Total des entrées',
+              'value': '+ ${totalEntrees.toStringAsFixed(2)} \$'
+            },
+            {
+              'label': 'Total des sorties',
+              'value': '- ${totalSorties.toStringAsFixed(2)} \$'
+            },
+            {
+              'label': 'Solde net de clôture',
+              'value': '${soldeCloture.toStringAsFixed(2)} \$'
+            },
           ],
         },
       ];
@@ -380,7 +433,12 @@ class _FinanceViewState extends State<FinanceView> {
         sections.add({
           'title': 'Détail des mouvements enregistrés (${rows.length})',
           'table': {
-            'headers': ['Date & Heure', 'Type de flux', 'Montant', 'Motif / Description'],
+            'headers': [
+              'Date & Heure',
+              'Type de flux',
+              'Montant',
+              'Motif / Description'
+            ],
             'rows': rows,
           },
         });
@@ -388,7 +446,10 @@ class _FinanceViewState extends State<FinanceView> {
         sections.add({
           'title': 'Détail des mouvements',
           'items': [
-            {'label': 'Aucun mouvement enregistré sur cette période', 'value': ''},
+            {
+              'label': 'Aucun mouvement enregistré sur cette période',
+              'value': ''
+            },
           ],
         });
       }
@@ -398,14 +459,17 @@ class _FinanceViewState extends State<FinanceView> {
             ? 'Rapport de Caisse Mensuel — ${now.month}/${now.year}'
             : 'Rapport de Caisse Journalier — ${now.day}/${now.month}/${now.year}',
         data: {
-          'subtitle': mensuel ? 'Période mensuelle Quincaillerie La Grâce' : 'Clôture journalière Quincaillerie La Grâce',
+          'subtitle': mensuel
+              ? 'Période mensuelle Quincaillerie La Grâce'
+              : 'Clôture journalière Quincaillerie La Grâce',
           'sections': sections,
         },
         filename: 'rapport_caisse_${mensuel ? "mensuel" : "journalier"}.pdf',
       );
       _snack('Rapport généré avec succès', const Color(0xFF107C41));
     } catch (e) {
-      _snack('Erreur lors de la génération du rapport : $e', const Color(0xFFC42B1C));
+      _snack('Erreur lors de la génération du rapport : $e',
+          const Color(0xFFC42B1C));
     }
   }
 
@@ -421,6 +485,10 @@ class _FinanceViewState extends State<FinanceView> {
     final s = v.toString();
     try {
       final dt = DateTime.parse(s);
+      // Si la valeur est une date seule (pas de 'T'), afficher sans heure
+      if (!s.contains('T') && !s.contains(' ')) {
+        return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+      }
       return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} à ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     } catch (_) {
       return s;
@@ -479,7 +547,8 @@ class _FinanceViewState extends State<FinanceView> {
           ),
           _buildWaveMetricCard(
             title: "FLUX NET DU JOUR",
-            value: "${fluxNetJour >= 0 ? '+' : ''}${fluxNetJour.toStringAsFixed(2)} \$",
+            value:
+            "${fluxNetJour >= 0 ? '+' : ''}${fluxNetJour.toStringAsFixed(2)} \$",
             subtitle: "${_mouvements.length} mouvement(s)",
             badge: "Bilan",
             icon: Icons.receipt_long_outlined,
@@ -574,7 +643,8 @@ class _FinanceViewState extends State<FinanceView> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -588,7 +658,8 @@ class _FinanceViewState extends State<FinanceView> {
                         child: Icon(icon, color: Colors.white, size: 16),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.25),
                           borderRadius: BorderRadius.circular(4),
@@ -682,7 +753,6 @@ class _FinanceViewState extends State<FinanceView> {
   Widget _buildActionBar(bool isWide, int filteredCount) {
     return Row(
       children: [
-        // Recherche
         SizedBox(
           width: isWide ? 260 : 180,
           height: 38,
@@ -692,12 +762,17 @@ class _FinanceViewState extends State<FinanceView> {
             style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 13),
             decoration: InputDecoration(
               hintText: 'Rechercher motif, date...',
-              hintStyle: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFFA0AEC0), fontSize: 12.5),
-              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF6B7280), size: 18),
+              hintStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  color: Color(0xFFA0AEC0),
+                  fontSize: 12.5),
+              prefixIcon: const Icon(Icons.search_rounded,
+                  color: Color(0xFF6B7280), size: 18),
               suffixIcon: _searchCtrl.text.isNotEmpty
                   ? IconButton(
                 splashRadius: 14,
-                icon: const Icon(Icons.clear_rounded, size: 15, color: Color(0xFF6B7280)),
+                icon: const Icon(Icons.clear_rounded,
+                    size: 15, color: Color(0xFF6B7280)),
                 onPressed: () {
                   _searchCtrl.clear();
                   setState(() {});
@@ -707,15 +782,21 @@ class _FinanceViewState extends State<FinanceView> {
               filled: true,
               fillColor: const Color(0xFFFFFFFF),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0x18000000))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0x18000000))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.5)),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0x18000000))),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0x18000000))),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide:
+                  const BorderSide(color: Color(0xFF0067C0), width: 1.5)),
             ),
           ),
         ),
         const SizedBox(width: 10),
 
-        // Sélecteur de filtre
         Container(
           height: 38,
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -728,7 +809,8 @@ class _FinanceViewState extends State<FinanceView> {
             value: _filtreType,
             underline: const SizedBox.shrink(),
             dropdownColor: Colors.white,
-            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF64748B)),
+            icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                size: 18, color: Color(0xFF64748B)),
             style: const TextStyle(
               fontFamily: kAppFontFamily,
               fontSize: 12.5,
@@ -749,7 +831,6 @@ class _FinanceViewState extends State<FinanceView> {
 
         const Spacer(),
 
-        // Bouton Entrée
         SizedBox(
           height: 38,
           child: ElevatedButton.icon(
@@ -761,14 +842,17 @@ class _FinanceViewState extends State<FinanceView> {
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              textStyle: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 12.5),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              textStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5),
             ),
           ),
         ),
         const SizedBox(width: 8),
 
-        // Bouton Sortie
         SizedBox(
           height: 38,
           child: ElevatedButton.icon(
@@ -780,14 +864,17 @@ class _FinanceViewState extends State<FinanceView> {
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              textStyle: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 12.5),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              textStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5),
             ),
           ),
         ),
         const SizedBox(width: 8),
 
-        // Rapports
         SizedBox(
           height: 38,
           child: OutlinedButton.icon(
@@ -798,8 +885,12 @@ class _FinanceViewState extends State<FinanceView> {
               foregroundColor: const Color(0xFF0F172A),
               side: const BorderSide(color: Color(0x20000000)),
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              textStyle: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w600, fontSize: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              textStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12),
             ),
           ),
         ),
@@ -814,14 +905,17 @@ class _FinanceViewState extends State<FinanceView> {
               foregroundColor: const Color(0xFF0F172A),
               side: const BorderSide(color: Color(0x20000000)),
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              textStyle: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w600, fontSize: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              textStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12),
             ),
           ),
         ),
         const SizedBox(width: 6),
 
-        // Actualiser
         SizedBox(
           height: 38,
           width: 38,
@@ -831,7 +925,8 @@ class _FinanceViewState extends State<FinanceView> {
               foregroundColor: const Color(0xFF0F172A),
               side: const BorderSide(color: Color(0x20000000)),
               padding: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             child: const Icon(Icons.refresh_rounded, size: 17),
           ),
@@ -853,7 +948,8 @@ class _FinanceViewState extends State<FinanceView> {
             child: ConstrainedBox(
               constraints: BoxConstraints(minWidth: constraints.maxWidth),
               child: DataTable(
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                headingRowColor:
+                WidgetStateProperty.all(const Color(0xFFF8FAFC)),
                 headingRowHeight: 42,
                 dataRowMinHeight: 50,
                 dataRowMaxHeight: 52,
@@ -861,27 +957,35 @@ class _FinanceViewState extends State<FinanceView> {
                 columnSpacing: 28,
                 dividerThickness: 1,
                 columns: const [
-                  DataColumn(label: Text("DATE & HEURE", style: _headerStyle)),
-                  DataColumn(label: Text("NATURE DU FLUX", style: _headerStyle)),
-                  DataColumn(label: Text("MOTIF / DESCRIPTION", style: _headerStyle)),
+                  DataColumn(
+                      label: Text("DATE & HEURE", style: _headerStyle)),
+                  DataColumn(
+                      label: Text("NATURE DU FLUX", style: _headerStyle)),
+                  DataColumn(
+                      label:
+                      Text("MOTIF / DESCRIPTION", style: _headerStyle)),
                   DataColumn(label: Text("CATÉGORIE", style: _headerStyle)),
-                  DataColumn(label: Text("MONTANT MOUVEMENT", style: _headerStyle)),
+                  DataColumn(
+                      label:
+                      Text("MONTANT MOUVEMENT", style: _headerStyle)),
                 ],
                 rows: filtered.map((m) {
                   final isEntree = m['type_mouvement'] == 'entree';
                   final montant = _parseNum(m['montant']);
-                  final date = _formatDate(m['date_mouvement']);
-                  final desc = (m['description'] ?? 'Mouvement sans libellé').toString();
+                  final date =
+                  _formatDate(m['created_at'] ?? m['date_mouvement']);
+                  final desc =
+                  (m['description'] ?? 'Mouvement sans libellé').toString();
                   final cat = (m['categorie'] ?? 'Caisse générale').toString();
 
                   return DataRow(
                     cells: [
-                      // Date
                       DataCell(
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.event_outlined, size: 14, color: Color(0xFF64748B)),
+                            const Icon(Icons.event_outlined,
+                                size: 14, color: Color(0xFF64748B)),
                             const SizedBox(width: 8),
                             Text(
                               date,
@@ -895,29 +999,36 @@ class _FinanceViewState extends State<FinanceView> {
                           ],
                         ),
                       ),
-
-                      // Nature du flux (Badge Pilule)
                       DataCell(
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: isEntree ? const Color(0xFFE6F4EA) : const Color(0xFFFDE8E8),
+                            color: isEntree
+                                ? const Color(0xFFE6F4EA)
+                                : const Color(0xFFFDE8E8),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                isEntree ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+                                isEntree
+                                    ? Icons.arrow_downward_rounded
+                                    : Icons.arrow_upward_rounded,
                                 size: 12,
-                                color: isEntree ? const Color(0xFF107C41) : const Color(0xFFC42B1C),
+                                color: isEntree
+                                    ? const Color(0xFF107C41)
+                                    : const Color(0xFFC42B1C),
                               ),
                               const SizedBox(width: 4),
                               Text(
                                 isEntree ? 'Entrée Caisse' : 'Sortie Caisse',
                                 style: TextStyle(
                                   fontFamily: kAppFontFamily,
-                                  color: isEntree ? const Color(0xFF107C41) : const Color(0xFFC42B1C),
+                                  color: isEntree
+                                      ? const Color(0xFF107C41)
+                                      : const Color(0xFFC42B1C),
                                   fontSize: 10.5,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -926,8 +1037,6 @@ class _FinanceViewState extends State<FinanceView> {
                           ),
                         ),
                       ),
-
-                      // Description
                       DataCell(
                         Text(
                           desc,
@@ -939,11 +1048,10 @@ class _FinanceViewState extends State<FinanceView> {
                           ),
                         ),
                       ),
-
-                      // Catégorie
                       DataCell(
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF1F5F9),
                             borderRadius: BorderRadius.circular(6),
@@ -959,8 +1067,6 @@ class _FinanceViewState extends State<FinanceView> {
                           ),
                         ),
                       ),
-
-                      // Montant
                       DataCell(
                         Text(
                           '${isEntree ? '+' : '-'} ${montant.toStringAsFixed(2)} \$',
@@ -968,7 +1074,9 @@ class _FinanceViewState extends State<FinanceView> {
                             fontFamily: kAppFontFamily,
                             fontWeight: FontWeight.w700,
                             fontSize: 13.5,
-                            color: isEntree ? const Color(0xFF107C41) : const Color(0xFFC42B1C),
+                            color: isEntree
+                                ? const Color(0xFF107C41)
+                                : const Color(0xFFC42B1C),
                           ),
                         ),
                       ),
@@ -998,12 +1106,13 @@ class _FinanceViewState extends State<FinanceView> {
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: filtered.length,
-      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0x12000000)),
+      separatorBuilder: (_, __) =>
+      const Divider(height: 1, color: Color(0x12000000)),
       itemBuilder: (context, index) {
         final m = filtered[index];
         final isEntree = m['type_mouvement'] == 'entree';
         final montant = _parseNum(m['montant']);
-        final date = _formatDate(m['date_mouvement']);
+        final date = _formatDate(m['created_at'] ?? m['date_mouvement']);
         final desc = (m['description'] ?? 'Mouvement').toString();
 
         return Padding(
@@ -1013,12 +1122,18 @@ class _FinanceViewState extends State<FinanceView> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: isEntree ? const Color(0xFFE6F4EA) : const Color(0xFFFDE8E8),
+                  color: isEntree
+                      ? const Color(0xFFE6F4EA)
+                      : const Color(0xFFFDE8E8),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
-                  isEntree ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
-                  color: isEntree ? const Color(0xFF107C41) : const Color(0xFFC42B1C),
+                  isEntree
+                      ? Icons.arrow_downward_rounded
+                      : Icons.arrow_upward_rounded,
+                  color: isEntree
+                      ? const Color(0xFF107C41)
+                      : const Color(0xFFC42B1C),
                   size: 18,
                 ),
               ),
@@ -1038,7 +1153,10 @@ class _FinanceViewState extends State<FinanceView> {
                     ),
                     Text(
                       date,
-                      style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11, color: Color(0xFF64748B)),
+                      style: const TextStyle(
+                          fontFamily: kAppFontFamily,
+                          fontSize: 11,
+                          color: Color(0xFF64748B)),
                     ),
                   ],
                 ),
@@ -1049,7 +1167,9 @@ class _FinanceViewState extends State<FinanceView> {
                   fontFamily: kAppFontFamily,
                   fontWeight: FontWeight.w700,
                   fontSize: 13.5,
-                  color: isEntree ? const Color(0xFF107C41) : const Color(0xFFC42B1C),
+                  color: isEntree
+                      ? const Color(0xFF107C41)
+                      : const Color(0xFFC42B1C),
                 ),
               ),
             ],
@@ -1070,15 +1190,10 @@ class _FinanceViewState extends State<FinanceView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 1. Indicateurs Synthétiques avec Ondes Fluides
         _buildFinanceMetricsRow(),
         const SizedBox(height: 18),
-
-        // 2. Barre d'outils
         _buildActionBar(isWide, filtered.length),
         const SizedBox(height: 14),
-
-        // 3. Tableau de données
         Expanded(
           child: Container(
             decoration: BoxDecoration(
@@ -1131,7 +1246,8 @@ class _FinanceViewState extends State<FinanceView> {
         if (isRequired)
           const Text(
             ' *',
-            style: TextStyle(color: Color(0xFFC42B1C), fontWeight: FontWeight.bold),
+            style:
+            TextStyle(color: Color(0xFFC42B1C), fontWeight: FontWeight.bold),
           ),
       ],
     );
@@ -1176,12 +1292,16 @@ class _FinanceViewState extends State<FinanceView> {
           children: [
             Container(
               padding: const EdgeInsets.all(14),
-              decoration: const BoxDecoration(color: Color(0xFFF1F5F9), shape: BoxShape.circle),
-              child: const Icon(Icons.account_balance_wallet_outlined, size: 32, color: Color(0xFF94A3B8)),
+              decoration: const BoxDecoration(
+                  color: Color(0xFFF1F5F9), shape: BoxShape.circle),
+              child: const Icon(Icons.account_balance_wallet_outlined,
+                  size: 32, color: Color(0xFF94A3B8)),
             ),
             const SizedBox(height: 14),
             Text(
-              _searchCtrl.text.isEmpty ? 'Aucun mouvement de caisse enregistré' : 'Aucun mouvement correspondant',
+              _searchCtrl.text.isEmpty
+                  ? 'Aucun mouvement de caisse enregistré'
+                  : 'Aucun mouvement correspondant',
               style: const TextStyle(
                 fontFamily: kAppFontFamily,
                 fontSize: 15,
@@ -1209,7 +1329,7 @@ class _FinanceViewState extends State<FinanceView> {
 }
 
 // ---------------------------------------------------------------------------
-// PAINTER VECTORIEL : ONDES FLUIDES DES CARTES FINANCE (WINDOWS BLOOM)
+// PAINTER VECTORIEL : ONDES FLUIDES DES CARTES FINANCE
 // ---------------------------------------------------------------------------
 class FinanceMetricWavePainter extends CustomPainter {
   final double waveSeed;

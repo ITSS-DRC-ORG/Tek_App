@@ -223,15 +223,10 @@ class _ProductViewState extends State<ProductView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 1. Les 3 Cartes Métriques avec Motifs Ondes Fluides
         _buildStockMetricsRow(),
         const SizedBox(height: 18),
-
-        // 2. Barre d'outils (Recherche & Nouveau Produit)
         _buildActionBar(isWide),
         const SizedBox(height: 14),
-
-        // 3. Tableau de données principal
         Expanded(
           child: _isLoading
               ? const Center(
@@ -266,7 +261,7 @@ class _ProductViewState extends State<ProductView> {
   }
 
   // ---------------------------------------------------------------------------
-  // 1. LES CARTES DE MÉTRIQUES STYLISÉES AVEC ONDES FLUIDES (STYLE RÉFÉRENCE)
+  // 1. LES CARTES DE MÉTRIQUES STYLISÉES AVEC ONDES FLUIDES
   // ---------------------------------------------------------------------------
   Widget _buildStockMetricsRow() {
     final total = _products.length;
@@ -344,7 +339,6 @@ class _ProductViewState extends State<ProductView> {
     );
   }
 
-  // Composant Carte avec Bannière Vectorielle Fluide Windows 11
   Widget _buildWaveMetricCard({
     required String title,
     required String value,
@@ -371,12 +365,10 @@ class _ProductViewState extends State<ProductView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Bannière supérieure avec ondulations vectorielles
           SizedBox(
             height: 64,
             child: Stack(
               children: [
-                // Dégradé de base
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -386,13 +378,11 @@ class _ProductViewState extends State<ProductView> {
                     ),
                   ),
                 ),
-                // Ondes vectorielles fluides
                 Positioned.fill(
                   child: CustomPaint(
                     painter: MetricWavePainter(waveSeed: waveSeed),
                   ),
                 ),
-                // Contenu sur l'onde : Icône & Tag
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   child: Row(
@@ -430,8 +420,6 @@ class _ProductViewState extends State<ProductView> {
               ],
             ),
           ),
-
-          // Pied de carte blanc avec Métrique & Libellés
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
             child: Row(
@@ -499,12 +487,11 @@ class _ProductViewState extends State<ProductView> {
   }
 
   // ---------------------------------------------------------------------------
-  // 2. BARRE D'ACTIONS (Recherche, Décompte & Bouton Principal)
+  // 2. BARRE D'ACTIONS
   // ---------------------------------------------------------------------------
   Widget _buildActionBar(bool isWide) {
     return Row(
       children: [
-        // Champ de recherche Fluent
         Expanded(
           flex: isWide ? 0 : 1,
           child: SizedBox(
@@ -576,7 +563,6 @@ class _ProductViewState extends State<ProductView> {
 
         const Spacer(),
 
-        // Bouton Nouveau Produit
         SizedBox(
           height: 38,
           child: ElevatedButton.icon(
@@ -603,7 +589,7 @@ class _ProductViewState extends State<ProductView> {
   }
 
   // ---------------------------------------------------------------------------
-  // 3. TABLEAU DE DONNÉES DESKTOP
+  // 3. TABLEAU DE DONNÉES DESKTOP (colonne PRIX ACHAT retirée)
   // ---------------------------------------------------------------------------
   Widget _buildFullDataTable() {
     return LayoutBuilder(
@@ -625,7 +611,6 @@ class _ProductViewState extends State<ProductView> {
                 columns: const [
                   DataColumn(label: Text("CODE ARTICLE", style: _headerStyle)),
                   DataColumn(label: Text("DÉSIGNATION", style: _headerStyle)),
-                  DataColumn(label: Text("PRIX ACHAT", style: _headerStyle)),
                   DataColumn(label: Text("PRIX VENTE", style: _headerStyle)),
                   DataColumn(label: Text("UNITÉ", style: _headerStyle)),
                   DataColumn(label: Text("SEUIL ALERTE", style: _headerStyle)),
@@ -669,20 +654,7 @@ class _ProductViewState extends State<ProductView> {
                         ),
                       ),
 
-                      // 3. Prix Achat
-                      DataCell(
-                        Text(
-                          '${p.prixAchat.toStringAsFixed(2)} \$',
-                          style: const TextStyle(
-                            fontFamily: kAppFontFamily,
-                            fontWeight: FontWeight.w400,
-                            color: Color(0xFF64748B),
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-
-                      // 4. Prix Vente
+                      // 3. Prix Vente
                       DataCell(
                         Text(
                           '${p.prixVente.toStringAsFixed(2)} \$',
@@ -695,7 +667,7 @@ class _ProductViewState extends State<ProductView> {
                         ),
                       ),
 
-                      // 5. Unité
+                      // 4. Unité
                       DataCell(
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
@@ -715,7 +687,7 @@ class _ProductViewState extends State<ProductView> {
                         ),
                       ),
 
-                      // 6. Seuil Alerte
+                      // 5. Seuil Alerte
                       DataCell(
                         Row(
                           mainAxisSize: MainAxisSize.min,
@@ -743,10 +715,10 @@ class _ProductViewState extends State<ProductView> {
                         ),
                       ),
 
-                      // 7. Statut
+                      // 6. Statut
                       DataCell(_buildStatusBadge(p.actif)),
 
-                      // 8. Actions
+                      // 7. Actions
                       DataCell(
                         Row(
                           mainAxisSize: MainAxisSize.min,

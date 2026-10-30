@@ -6,19 +6,19 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 class ReceiptPrinter {
-// Largeur POS 72 mm ≈ 204.1 pt (1 pt = 1/72 in)
+  // Largeur POS 72 mm ≈ 204.1 pt (1 pt = 1/72 in)
   static const double _posWidth = 204.1;
 
-// Nom de l'établissement officiel
+  // Nom de l'établissement officiel
   static const String _companyName = "QUINCAILLERIE LA GRÂCE";
   static const String _companyActivity =
       "Matériaux de Construction & Quincaillerie Générale";
   static const String _companyContact =
       "Tél : +243 000 000 000 — Vente au Comptoir & En Gros";
 
-// ---------------------------------------------------------------------
-// GESTION SÉCURISÉE DES POLICES UNICODE (ROBOTO)
-// ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------
+  // GESTION SÉCURISÉE DES POLICES UNICODE (ROBOTO)
+  // ---------------------------------------------------------------------
   static pw.Font? _cachedRegular;
   static pw.Font? _cachedBold;
 
@@ -28,7 +28,7 @@ class ReceiptPrinter {
       _cachedRegular = await PdfGoogleFonts.robotoRegular();
       _cachedBold = await PdfGoogleFonts.robotoBold();
     } catch (_) {
-// Fallback local standard si pas de connexion internet
+      // Fallback local standard si pas de connexion internet
       _cachedRegular = pw.Font.helvetica();
       _cachedBold = pw.Font.helveticaBold();
     }
@@ -51,9 +51,9 @@ class ReceiptPrinter {
         .trim();
   }
 
-// ---------------------------------------------------------------------
-// 1. REÇU TICKET DE CAISSE POS — 72 mm (IMPRESSION DIRECTE)
-// ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------
+  // 1. REÇU TICKET DE CAISSE POS — 72 mm (IMPRESSION DIRECTE)
+  // ---------------------------------------------------------------------
   static Future<void> printReceipt({
     required Map<String, dynamic> sale,
     required List<Map<String, dynamic>> lines,
@@ -63,6 +63,8 @@ class ReceiptPrinter {
     required double remise,
     required double total,
     required String numeroFacture,
+    double montantPaye = 0.0,      // NOUVEAU
+    double montantRestant = 0.0,   // NOUVEAU
     String documentType = 'FACTURE',
   }) async {
     final pdfBytes = await _generatePosPDF(
@@ -75,13 +77,20 @@ class ReceiptPrinter {
       total: total,
       numeroFacture: numeroFacture,
       documentType: documentType,
+      montantPaye: montantPaye,      // NOUVEAU
+      montantRestant: montantRestant, // NOUVEAU
     );
 
-// Sauvegarde sécurisée sans crash
+    // Sauvegarde sécurisée sans crash
     _savePdfSafely(
         pdfBytes, '${documentType.toLowerCase()}_$numeroFacture.pdf');
 
-    final double height = 270.0 + (lines.length * 24.0);
+    // Hauteur ajustée si bloc crédit
+    final double baseHeight = 270.0 + (lines.length * 24.0);
+    final double extraCredit =
+    (montantPaye > 0 || montantRestant > 0) ? 40.0 : 0.0;
+    final double height = baseHeight + extraCredit;
+
     await Printing.layoutPdf(
       onLayout: (_) => pdfBytes,
       name: '${documentType.toLowerCase()}_$numeroFacture',
@@ -90,9 +99,9 @@ class ReceiptPrinter {
     );
   }
 
-// ---------------------------------------------------------------------
-// 2. RAPPORT FINANCIER & LOGISTIQUE — A4 PROFESSIONNEL
-// ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------
+  // 2. RAPPORT FINANCIER & LOGISTIQUE — A4 PROFESSIONNEL
+  // ---------------------------------------------------------------------
   static Future<void> printReport({
     required String title,
     required Map<String, dynamic> data,
@@ -149,7 +158,7 @@ class ReceiptPrinter {
                       decoration: pw.BoxDecoration(
                         color: PdfColor.fromHex('#F1F5F9'),
                         borderRadius:
-                            const pw.BorderRadius.all(pw.Radius.circular(4)),
+                        const pw.BorderRadius.all(pw.Radius.circular(4)),
                       ),
                       child: pw.Text(
                         "Date : ${_fmt(DateTime.now())}",
@@ -164,8 +173,6 @@ class ReceiptPrinter {
             pw.SizedBox(height: 10),
             pw.Divider(thickness: 1.5, color: primaryColor),
             pw.SizedBox(height: 8),
-
-// Titre du rapport
             pw.Text(
               _safe(title),
               style: pw.TextStyle(
@@ -201,7 +208,7 @@ class ReceiptPrinter {
               pw.Text(
                 'Page ${context.pageNumber} / ${context.pagesCount}',
                 style:
-                    pw.TextStyle(font: fontBold, fontSize: 8, color: darkSlate),
+                pw.TextStyle(font: fontBold, fontSize: 8, color: darkSlate),
               ),
             ],
           ),
@@ -234,7 +241,6 @@ class ReceiptPrinter {
             }
             children.add(pw.SizedBox(height: 6));
 
-// TABLEAU PRINCIPAL DES DONNÉES
             if (section['table'] is Map) {
               final table = section['table'] as Map;
               final headers = (table['headers'] as List?)?.cast<String>() ?? [];
@@ -247,7 +253,6 @@ class ReceiptPrinter {
                         color: PdfColor.fromHex('#CBD5E1'), width: 0.5),
                     columnWidths: _columnWidths(headers.length),
                     children: [
-// Ligne d'en-tête
                       pw.TableRow(
                         decoration: pw.BoxDecoration(color: primaryColor),
                         children: headers.map((h) {
@@ -266,7 +271,6 @@ class ReceiptPrinter {
                           );
                         }).toList(),
                       ),
-// Lignes de données
                       ...rows.asMap().entries.map((entry) {
                         final i = entry.key;
                         final row = (entry.value as List?) ?? [];
@@ -278,7 +282,7 @@ class ReceiptPrinter {
                           decoration: pw.BoxDecoration(color: bg),
                           children: List.generate(headers.length, (col) {
                             final cell =
-                                col < row.length ? _safe(row[col]) : '';
+                            col < row.length ? _safe(row[col]) : '';
                             final isNumeric = col == headers.length - 1 ||
                                 cell.contains('\$') ||
                                 double.tryParse(cell.replaceAll(' ', '')) !=
@@ -308,7 +312,6 @@ class ReceiptPrinter {
               }
             }
 
-// PAIRES CLÉ / VALEUR
             if (section['items'] is List) {
               final items = section['items'] as List;
               if (items.isNotEmpty) {
@@ -318,7 +321,7 @@ class ReceiptPrinter {
                     decoration: pw.BoxDecoration(
                       color: PdfColor.fromHex('#F8FAFC'),
                       borderRadius:
-                          const pw.BorderRadius.all(pw.Radius.circular(4)),
+                      const pw.BorderRadius.all(pw.Radius.circular(4)),
                       border: pw.Border.all(
                           color: PdfColor.fromHex('#E2E8F0'), width: 0.8),
                     ),
@@ -328,7 +331,7 @@ class ReceiptPrinter {
                           padding: const pw.EdgeInsets.symmetric(vertical: 2.5),
                           child: pw.Row(
                             mainAxisAlignment:
-                                pw.MainAxisAlignment.spaceBetween,
+                            pw.MainAxisAlignment.spaceBetween,
                             children: [
                               pw.Text(
                                 _safe(e['label'] ?? ''),
@@ -392,9 +395,9 @@ class ReceiptPrinter {
     return map;
   }
 
-// ---------------------------------------------------------------------
-// 3. GÉNÉRATION DU PDF POS 72 mm (STYLE TICKET QUINCAILLERIE)
-// ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------
+  // 3. GÉNÉRATION DU PDF POS 72 mm (STYLE TICKET QUINCAILLERIE)
+  // ---------------------------------------------------------------------
   static Future<Uint8List> _generatePosPDF({
     required Map<String, dynamic> sale,
     required List<Map<String, dynamic>> lines,
@@ -405,13 +408,17 @@ class ReceiptPrinter {
     required double total,
     required String numeroFacture,
     required String documentType,
+    double montantPaye = 0.0,      // NOUVEAU
+    double montantRestant = 0.0,   // NOUVEAU
   }) async {
     await _initFonts();
     final pdf = pw.Document();
     final font = _cachedRegular;
     final fontBold = _cachedBold ?? _cachedRegular;
 
-    final double height = 270.0 + (lines.length * 24.0);
+    final bool aCredit = montantPaye > 0 || montantRestant > 0;
+    final double baseHeight = 270.0 + (lines.length * 24.0);
+    final double height = baseHeight + (aCredit ? 40.0 : 0.0);
 
     pdf.addPage(
       pw.Page(
@@ -426,7 +433,7 @@ class ReceiptPrinter {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: [
-// EN-TÊTE ÉTABLISSEMENT
+              // EN-TÊTE ÉTABLISSEMENT
               pw.Text(_companyName,
                   style: titleStyle, textAlign: pw.TextAlign.center),
               pw.SizedBox(height: 1.5),
@@ -441,10 +448,10 @@ class ReceiptPrinter {
               pw.SizedBox(height: 4),
               pw.Divider(thickness: 0.8, borderStyle: pw.BorderStyle.dashed),
 
-// RÉFÉRENCE DOCUMENT
+              // RÉFÉRENCE DOCUMENT
               pw.SizedBox(height: 2),
               pw.Text(
-                '${documentType == 'PROFORMA' ? 'PROFORMA' : 'TICKET DE CAISSE'} N° ${_safe(numeroFacture)}',
+                '${documentType == 'PROFORMA' ? 'PROFORMA' : documentType.replaceAll('_', ' ')} N° ${_safe(numeroFacture)}',
                 style: boldStyle,
                 textAlign: pw.TextAlign.center,
               ),
@@ -454,7 +461,7 @@ class ReceiptPrinter {
               pw.SizedBox(height: 4),
               pw.Divider(thickness: 0.8, borderStyle: pw.BorderStyle.dashed),
 
-// INFORMATIONS CLIENT
+              // INFORMATIONS CLIENT
               pw.SizedBox(height: 2),
               _row('Client', _safe(clientName), regularStyle, boldStyle),
               _row('Point de retrait', _safe(depotName), regularStyle,
@@ -462,7 +469,7 @@ class ReceiptPrinter {
               pw.SizedBox(height: 4),
               pw.Divider(thickness: 0.8, borderStyle: pw.BorderStyle.dashed),
 
-// EN-TÊTE TABLEAU DES ARTICLES
+              // EN-TÊTE TABLEAU DES ARTICLES
               pw.SizedBox(height: 3),
               pw.Row(children: [
                 pw.SizedBox(width: 24, child: pw.Text('Qté', style: boldStyle)),
@@ -478,7 +485,7 @@ class ReceiptPrinter {
               ]),
               pw.Divider(thickness: 0.5),
 
-// LIGNES PRODUITS
+              // LIGNES PRODUITS
               ...lines.map((line) {
                 final nom = _safe(line['produit_nom'] ?? 'Article');
                 final q = line['quantite'] as int? ?? 1;
@@ -513,7 +520,7 @@ class ReceiptPrinter {
               pw.SizedBox(height: 4),
               pw.Divider(thickness: 0.8, borderStyle: pw.BorderStyle.dashed),
 
-// CALCULS ET TOTAUX
+              // CALCULS ET TOTAUX
               _row('Sous-total brut', '${subtotal.toStringAsFixed(2)} \$',
                   regularStyle, boldStyle),
               if (remise > 0)
@@ -521,10 +528,10 @@ class ReceiptPrinter {
                     regularStyle, boldStyle),
 
               pw.SizedBox(height: 4),
-// CADRE NET À PAYER
+              // CADRE NET À PAYER
               pw.Container(
                 padding:
-                    const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
                 decoration: pw.BoxDecoration(
                   border: pw.Border.all(color: PdfColors.black, width: 1.2),
                 ),
@@ -545,9 +552,29 @@ class ReceiptPrinter {
                 ),
               ),
 
+              // BLOC CRÉDIT (NOUVEAU)
+              if (aCredit) ...[
+                pw.SizedBox(height: 5),
+                pw.Divider(
+                    thickness: 0.6, borderStyle: pw.BorderStyle.dashed),
+                pw.SizedBox(height: 2),
+                _row('Montant payé', '${montantPaye.toStringAsFixed(2)} \$',
+                    regularStyle, boldStyle),
+                if (montantRestant > 0)
+                  _row('Reste à payer', '${montantRestant.toStringAsFixed(2)} \$',
+                      regularStyle, boldStyle),
+                pw.SizedBox(height: 3),
+                pw.Divider(
+                    thickness: 0.6, borderStyle: pw.BorderStyle.dashed),
+              ],
+
               pw.SizedBox(height: 6),
-              pw.Text('Mode de règlement : COMPTANT (USD)',
-                  style: regularStyle, textAlign: pw.TextAlign.center),
+              pw.Text(
+                  aCredit
+                      ? 'Règlement partiel — Reste à percevoir'
+                      : 'Mode de règlement : COMPTANT (USD)',
+                  style: regularStyle,
+                  textAlign: pw.TextAlign.center),
               pw.SizedBox(height: 4),
               pw.Text('Merci pour votre confiance !',
                   style: boldStyle, textAlign: pw.TextAlign.center),
@@ -587,11 +614,11 @@ class ReceiptPrinter {
 
   static String _fmt(DateTime dt) =>
       '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} '
-      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+          '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
-// ---------------------------------------------------------------------
-// GESTION DU RÉPERTOIRE INFAILLIBLE WINDOWS
-// ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------
+  // GESTION DU RÉPERTOIRE INFAILLIBLE WINDOWS
+  // ---------------------------------------------------------------------
   static Future<Directory> _getSafeReceiptDirectory() async {
     final userProfile = Platform.environment['USERPROFILE'];
 
@@ -606,7 +633,7 @@ class ReceiptPrinter {
 
       try {
         final oneDriveDoc =
-            Directory('$userProfile\\OneDrive\\Documents\\TEK_app_Receipts');
+        Directory('$userProfile\\OneDrive\\Documents\\TEK_app_Receipts');
         if (await oneDriveDoc.parent.exists()) {
           if (!await oneDriveDoc.exists())
             await oneDriveDoc.create(recursive: true);
@@ -616,7 +643,7 @@ class ReceiptPrinter {
     }
 
     final fallbackDir =
-        Directory('${Directory.systemTemp.path}\\TEK_app_Receipts');
+    Directory('${Directory.systemTemp.path}\\TEK_app_Receipts');
     if (!await fallbackDir.exists()) {
       await fallbackDir.create(recursive: true);
     }

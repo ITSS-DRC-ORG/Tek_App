@@ -19,105 +19,84 @@ class PermissionException implements Exception {
 class AdminService {
   final String token;
 
+  double _toDouble(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0.0;
+    return 0.0;
+  }
+
   AdminService(this.token);
 
 
 /// Valide une facture avec un mode de paiement spécifique
-Future<Map<String, dynamic>> validateInvoiceWithMode(
-  int saleId, {
-  String modePaiement = 'especes',
-}) async {
-  try {
-    print('✅ Validation de la facture #$saleId avec mode: $modePaiement');
-    
-    final body = {
-      'mode_paiement': modePaiement,
-    };
-    
-    final response = await http.post(
-      Uri.parse('${AppConfig.baseUrl}/ventes/$saleId/paiement'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(body),
-    );
+  Future<Map<String, dynamic>> validateInvoiceWithMode(
+      int saleId, {
+        String modePaiement = 'cash',
+        double? montant,
+      }) async {
+    try {
+      final sale = await getSale(saleId);
+      final restant = _toDouble(sale['montant_restant']);
+      final montantFinal = montant ?? restant;
 
-    print('📡 Status Code: ${response.statusCode}');
-    print('📡 Response: ${response.body}');
+      if (montantFinal <= 0) {
+        return {'success': false, 'message': 'Montant invalide ou vente déjà soldée'};
+      }
 
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      return {
-        'success': true,
-        'data': json.decode(response.body),
-      };
-    } else {
-      return {
-        'success': false,
-        'message': 'Erreur: ${response.body}',
-      };
+      final r = await http.post(
+        Uri.parse('${AppConfig.baseUrl}/ventes/$saleId/paiement'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'montant': montantFinal, 'mode_paiement': modePaiement}),
+      );
+
+      print('📡 Status: ${r.statusCode}');
+      print('📡 Response: ${r.body}');
+
+      if (r.statusCode == 200) {
+        return {'success': true, 'data': json.decode(r.body)};
+      }
+      return {'success': false, 'message': 'Erreur: ${r.body}'};
+    } catch (e) {
+      print('❌ Exception validateInvoiceWithMode: $e');
+      return {'success': false, 'message': e.toString()};
     }
-  } catch (e) {
-    print('❌ Exception dans validateInvoiceWithMode: $e');
-    return {
-      'success': false,
-      'message': e.toString(),
-    };
   }
-}
 
 /// Valide une facture (admin uniquement) - enregistre le paiement
-Future<Map<String, dynamic>> validateInvoice(int saleId) async {
-  try {
-    print('✅ Validation de la facture #$saleId');
-    
-    // ✅ Ajouter le mode_paiement requis
-    final body = {
-      'mode_paiement': 'especes', // ou 'carte', 'mobile_money', etc.
-    };
-    
-    final response = await http.post(
-      Uri.parse('${AppConfig.baseUrl}/ventes/$saleId/paiement'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(body),
-    );
+  Future<Map<String, dynamic>> validateInvoice(int saleId) async {
+    try {
+      final sale = await getSale(saleId);
+      final restant = _toDouble(sale['montant_restant']);
 
-    print('📡 Status Code: ${response.statusCode}');
-    print('📡 Response: ${response.body}');
+      if (restant <= 0) {
+        return {'success': false, 'message': 'Vente déjà entièrement payée'};
+      }
 
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      return {
-        'success': true,
-        'data': json.decode(response.body),
-      };
-    } else if (response.statusCode == 403) {
-      return {
-        'success': false,
-        'message': 'Accès réservé aux administrateurs',
-      };
-    } else if (response.statusCode == 422) {
-      return {
-        'success': false,
-        'message': 'Données manquantes: ${response.body}',
-      };
-    } else {
-      return {
-        'success': false,
-        'message': 'Erreur lors de la validation: ${response.body}',
-      };
+      final r = await http.post(
+        Uri.parse('${AppConfig.baseUrl}/ventes/$saleId/paiement'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'montant': restant, 'mode_paiement': 'cash'}),
+      );
+
+      print('📡 Status: ${r.statusCode}');
+      print('📡 Response: ${r.body}');
+
+      if (r.statusCode == 200) {
+        return {'success': true, 'data': json.decode(r.body)};
+      }
+      return {'success': false, 'message': 'Erreur: ${r.body}'};
+    } catch (e) {
+      print('❌ Exception validateInvoice: $e');
+      return {'success': false, 'message': e.toString()};
     }
-  } catch (e) {
-    print('❌ Exception dans validateInvoice: $e');
-    return {
-      'success': false,
-      'message': e.toString(),
-    };
   }
-}
-
 /// Marque une vente comme livrée
 Future<Map<String, dynamic>> deliverSale(int saleId) async {
   try {
@@ -426,40 +405,39 @@ Future<Map<String, dynamic>> getSale(int id) async {
 
 /// Crée une nouvelle vente
   Future<Map<String, dynamic>> createSale({
-    required int clientId,
+    int? clientId,
+    String? clientNomLibre,
     required int depotSourceId,
     required String dateVente,
     required List<Map<String, dynamic>> lignes,
     double remise = 0.0,
+    String remiseType = 'montant',        // ← NOUVEAU
     String modeLivraison = 'retrait_magasin',
     String? notes,
-    String? dateRetrait,   // NOUVEAU : null = vente immédiate
+    String? dateRetrait,
+    double montantPayeInitial = 0.0,
   }) async {
     try {
-      print('🛒 Création d\'une nouvelle vente...');
-      print('👤 Client: $clientId, Dépôt: $depotSourceId');
-      print('📦 ${lignes.length} produits');
-
       final body = <String, dynamic>{
-        'client_id': clientId,
+        if (clientId != null) 'client_id': clientId,
+        if (clientNomLibre != null && clientNomLibre.isNotEmpty)
+          'client_nom_libre': clientNomLibre,
         'depot_source_id': depotSourceId,
         'date_vente': dateVente,
         'remise': remise,
-        'remise_type': 'pourcentage',
+        'remise_type': remiseType,        // ← remplace la valeur en dur 'pourcentage'
         'mode_livraison': modeLivraison,
         'notes': notes,
         'lignes': lignes,
         'type_vente': dateRetrait != null ? 'a_retirer' : 'normale',
         if (dateRetrait != null) 'date_retrait': dateRetrait,
+        'montant_paye_initial': montantPayeInitial,
       };
 
       print('📤 Body: ${jsonEncode(body)}');
 
-      final url = '${AppConfig.baseUrl}/ventes/';
-      print('📍 URL: $url');
-
       final response = await http.post(
-        Uri.parse(url),
+        Uri.parse('${AppConfig.baseUrl}/ventes/'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -467,46 +445,86 @@ Future<Map<String, dynamic>> getSale(int id) async {
         body: jsonEncode(body),
       );
 
-      print('📡 Status Code: ${response.statusCode}');
+      print('📡 Status: ${response.statusCode}');
       print('📡 Response: ${response.body}');
 
-      // Gestion 307
-      if (response.statusCode == 307) {
-        final location = response.headers['location'];
-        print('🔄 Redirection vers: $location');
-        if (location != null) {
-          final redirectResponse = await http.post(
-            Uri.parse(location),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode(body),
-          );
-          print('📡 Redirect Status: ${redirectResponse.statusCode}');
-          print('📡 Redirect Response: ${redirectResponse.body}');
-          if (redirectResponse.statusCode == 200 || redirectResponse.statusCode == 201) {
-            final data = json.decode(redirectResponse.body);
-            print('✅ Vente créée avec succès');
-            return data as Map<String, dynamic>;
-          } else {
-            throw Exception('Erreur lors de la création de la vente: ${redirectResponse.body}');
-          }
-        }
-      }
-
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = json.decode(response.body);
-        print('✅ Vente créée avec succès');
-        return data as Map<String, dynamic>;
-      } else {
-        throw Exception('Erreur lors de la création de la vente: ${response.body}');
+        return json.decode(response.body) as Map<String, dynamic>;
       }
+      throw Exception('Erreur ${response.statusCode}: ${response.body}');
     } catch (e) {
-      print('❌ Exception dans createSale: $e');
+      print('❌ Exception createSale: $e');
       rethrow;
     }
   }
+
+  Future<List<dynamic>> getCredits() async {
+    final r = await http.get(
+      Uri.parse('${AppConfig.baseUrl}/ventes/credits'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (r.statusCode == 200) return json.decode(r.body);
+    throw Exception('Erreur crédits (${r.statusCode})');
+  }
+
+  Future<List<dynamic>> getBonsCaisse({String? type, String? dateDebut, String? dateFin}) async {
+    final params = <String, String>{};
+    if (type != null) params['type_bon'] = type;
+    if (dateDebut != null) params['date_debut'] = dateDebut;
+    if (dateFin != null) params['date_fin'] = dateFin;
+    final uri = Uri.parse('${AppConfig.baseUrl}/bons-caisse/').replace(queryParameters: params);
+    final r = await http.get(uri, headers: {'Authorization': 'Bearer $token'});
+    if (r.statusCode == 200) return json.decode(r.body);
+    throw Exception('Erreur bons (${r.statusCode})');
+  }
+
+  Future<dynamic> createBonCaisse({
+    required String typeBon,       // 'entree' ou 'sortie'
+    required double montant,
+    required String nom,
+    required String motif,
+    required String dateBon,
+    int? depotId,
+  }) async {
+    final body = <String, dynamic>{
+      'type_bon': typeBon,
+      'montant': montant,
+      'nom': nom,
+      'motif': motif,
+      'date_bon': dateBon,
+      if (depotId != null) 'depot_id': depotId,
+    };
+    final r = await http.post(
+      Uri.parse('${AppConfig.baseUrl}/bons-caisse/'),
+      headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    if (r.statusCode == 201) return json.decode(r.body);
+    throw Exception('Erreur création bon: ${r.body}');
+  }
+
+  Future<dynamic> deleteBonCaisse(int id) async {
+    final r = await http.delete(
+      Uri.parse('${AppConfig.baseUrl}/bons-caisse/$id'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (r.statusCode == 204) return true;
+    throw Exception('Erreur suppression bon: ${r.body}');
+  }
+
+  Future<dynamic> payerVente(int venteId, double montant) async {
+    final r = await http.post(
+      Uri.parse('${AppConfig.baseUrl}/ventes/$venteId/paiement'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'montant': montant, 'mode_paiement': 'cash'}),
+    );
+    if (r.statusCode == 200) return json.decode(r.body);
+    throw Exception('Erreur paiement: ${r.body}');
+  }
+
 /// Enregistre un paiement pour une vente
 Future<Map<String, dynamic>> paySale(int id) async {
   try {
@@ -1369,12 +1387,12 @@ Future<bool> deleteUser(int id) async {
   }
 
   /// Crée un nouveau produit
+  /// Crée un nouveau produit
   Future<Product> createProduct({
     required String code,
     required String nom,
     String? description,
     required int categorieId,
-    required double prixAchat,
     required double prixVente,
     required String unite,
     int seuilAlerte = 10,
@@ -1391,7 +1409,6 @@ Future<bool> deleteUser(int id) async {
         'nom': nom,
         'description': description,
         'categorie_id': categorieId,
-        'prix_achat': prixAchat.toString(),
         'prix_vente': prixVente.toString(),
         'unite': unite,
         'seuil_alerte': seuilAlerte,

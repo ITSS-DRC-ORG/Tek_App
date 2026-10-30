@@ -22,7 +22,6 @@ class _AddProductDialogState extends State<AddProductDialog> {
   final TextEditingController _codeCtrl = TextEditingController();
   final TextEditingController _nomCtrl = TextEditingController();
   final TextEditingController _descriptionCtrl = TextEditingController();
-  final TextEditingController _prixAchatCtrl = TextEditingController();
   final TextEditingController _prixVenteCtrl = TextEditingController();
   final TextEditingController _uniteCtrl = TextEditingController();
   final TextEditingController _seuilCtrl = TextEditingController();
@@ -44,7 +43,6 @@ class _AddProductDialogState extends State<AddProductDialog> {
       _codeCtrl.text = p.code;
       _nomCtrl.text = p.nom;
       _descriptionCtrl.text = p.description ?? '';
-      _prixAchatCtrl.text = p.prixAchat.toString();
       _prixVenteCtrl.text = p.prixVente.toString();
       _uniteCtrl.text = p.unite;
       _seuilCtrl.text = p.seuilAlerte.toString();
@@ -58,7 +56,6 @@ class _AddProductDialogState extends State<AddProductDialog> {
     _codeCtrl.dispose();
     _nomCtrl.dispose();
     _descriptionCtrl.dispose();
-    _prixAchatCtrl.dispose();
     _prixVenteCtrl.dispose();
     _uniteCtrl.dispose();
     _seuilCtrl.dispose();
@@ -85,7 +82,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
   }
 
   // ---------------------------------------------------------------------------
-  // SAUVEGARDER LE PRODUIT (Inchangé)
+  // SAUVEGARDER LE PRODUIT
   // ---------------------------------------------------------------------------
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
@@ -118,7 +115,6 @@ class _AddProductDialogState extends State<AddProductDialog> {
                 ? null
                 : _descriptionCtrl.text.trim(),
             'categorie_id': _selectedCategorieId,
-            'prix_achat': double.parse(_prixAchatCtrl.text.trim()),
             'prix_vente': double.parse(_prixVenteCtrl.text.trim()),
             'unite': _uniteCtrl.text.trim(),
             'seuil_alerte': int.tryParse(_seuilCtrl.text.trim()) ?? 10,
@@ -133,7 +129,6 @@ class _AddProductDialogState extends State<AddProductDialog> {
               ? null
               : _descriptionCtrl.text.trim(),
           categorieId: _selectedCategorieId!,
-          prixAchat: double.parse(_prixAchatCtrl.text.trim()),
           prixVente: double.parse(_prixVenteCtrl.text.trim()),
           unite: _uniteCtrl.text.trim(),
           seuilAlerte: int.tryParse(_seuilCtrl.text.trim()) ?? 10,
@@ -291,32 +286,14 @@ class _AddProductDialogState extends State<AddProductDialog> {
                         _buildCategorySection(),
                         const SizedBox(height: 16),
 
-                        // LIGNE 3 : PRIX D'ACHAT & PRIX DE VENTE (50 / 50)
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: _buildInputField(
-                                controller: _prixAchatCtrl,
-                                label: 'Prix d\'achat (\$)',
-                                hint: '0.00',
-                                icon: Icons.arrow_downward_rounded,
-                                isRequired: true,
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: _buildInputField(
-                                controller: _prixVenteCtrl,
-                                label: 'Prix de vente (\$)',
-                                hint: '0.00',
-                                icon: Icons.arrow_upward_rounded,
-                                isRequired: true,
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                          ],
+                        // LIGNE 3 : PRIX DE VENTE (pleine largeur)
+                        _buildInputField(
+                          controller: _prixVenteCtrl,
+                          label: 'Prix de vente (\$)',
+                          hint: '0.00',
+                          icon: Icons.arrow_upward_rounded,
+                          isRequired: true,
+                          keyboardType: TextInputType.number,
                         ),
                         const SizedBox(height: 16),
 

@@ -8,6 +8,7 @@ import 'package:tek_app/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/user_model.dart';
 import '../admin/view/finance_view.dart';
+import '../admin/view/bons_caisse_view.dart';   // ← NOUVEAU
 
 class CashierHome extends StatefulWidget {
   const CashierHome({super.key});
@@ -17,7 +18,6 @@ class CashierHome extends StatefulWidget {
 }
 
 class _CashierHomeState extends State<CashierHome> {
-
   bool get _hasFinanceAccess {
     final user = Provider.of<AuthProvider>(context, listen: false).user;
     return user?.role == UserRole.caissier || user?.role == UserRole.admin;
@@ -31,15 +31,21 @@ class _CashierHomeState extends State<CashierHome> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final user = Provider.of<AuthProvider>(context, listen: false).user;
-    final isCaissier = user?.role == UserRole.caissier || user?.role == UserRole.admin;
+    final isCaissier =
+        user?.role == UserRole.caissier || user?.role == UserRole.admin;
 
     _pages = [
-      const CashierDashboard(),
-      const CashierSales(),
-      const CashierClients(),
-      if (isCaissier) const FinanceView(),
-      const CashierProfile(),
+      const CashierDashboard(),                 // 0
+      const CashierSales(),                     // 1
+      const CashierClients(),                   // 2
+      if (isCaissier) const FinanceView(),      // 3
+      if (isCaissier) const BonsCaisseView(),   // 4 ← NOUVEAU
+      const CashierProfile(),                   // 5 (ou 3 si non caissier)
     ];
+
+    if (user == null || _selectedIndex >= _pages.length) {
+      _selectedIndex = 0;
+    }
   }
 
   Future<void> _confirmLogout(BuildContext context) async {
@@ -61,7 +67,8 @@ class _CashierHomeState extends State<CashierHome> {
                 color: const Color(0xFFFDE8E8),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.logout_rounded, color: Color(0xFFC42B1C), size: 20),
+              child: const Icon(Icons.logout_rounded,
+                  color: Color(0xFFC42B1C), size: 20),
             ),
             const SizedBox(width: 12),
             const Text(
@@ -89,7 +96,8 @@ class _CashierHomeState extends State<CashierHome> {
             onPressed: () => Navigator.pop(dialogContext, false),
             style: TextButton.styleFrom(
               foregroundColor: const Color(0xFF475569),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6)),
             ),
             child: const Text(
               'Annuler',
@@ -107,7 +115,8 @@ class _CashierHomeState extends State<CashierHome> {
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             child: const Text(
               'Se déconnecter',
@@ -150,7 +159,8 @@ class _CashierHomeState extends State<CashierHome> {
                   child: Container(
                     color: const Color(0xFFF8FAFC),
                     padding: const EdgeInsets.all(22.0),
-                    child: _pages[_selectedIndex],
+                    child: _pages[
+                    _selectedIndex.clamp(0, _pages.length - 1)],
                   ),
                 ),
               ],
@@ -160,14 +170,14 @@ class _CashierHomeState extends State<CashierHome> {
       )
           : Padding(
         padding: const EdgeInsets.all(16.0),
-        child: _pages[_selectedIndex],
+        child: _pages[_selectedIndex.clamp(0, _pages.length - 1)],
       ),
       bottomNavigationBar: isWide ? null : _buildBottomNavigationBar(),
     );
   }
 
   // ---------------------------------------------------------------------------
-  // SIDEBAR DESKTOP FLUENT 2
+  // SIDEBAR DESKTOP
   // ---------------------------------------------------------------------------
   Widget _buildSidebar(UserModel? user) {
     return Container(
@@ -182,7 +192,6 @@ class _CashierHomeState extends State<CashierHome> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // En-tête Marque
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
               child: Row(
@@ -236,8 +245,6 @@ class _CashierHomeState extends State<CashierHome> {
                 ],
               ),
             ),
-
-            // Séparateur de section
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Text(
@@ -251,31 +258,35 @@ class _CashierHomeState extends State<CashierHome> {
                 ),
               ),
             ),
-
-            // Navigation Caisse
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 children: [
-                  _sidebarItem(Icons.dashboard_outlined, 'Tableau de bord', 0),
-                  _sidebarItem(Icons.shopping_bag_outlined, 'Ventes & Tickets', 1),
-                  _sidebarItem(Icons.people_outline_rounded, 'Répertoire Clients', 2),
-                  if (_hasFinanceAccess)
-                    _sidebarItem(Icons.account_balance_wallet_outlined, 'Finance & Caisse', 3),
+                  _sidebarItem(
+                      Icons.dashboard_outlined, 'Tableau de bord', 0),
+                  _sidebarItem(
+                      Icons.shopping_bag_outlined, 'Ventes & Tickets', 1),
+                  _sidebarItem(Icons.people_outline_rounded,
+                      'Répertoire Clients', 2),
+                  if (_hasFinanceAccess) ...[
+                    _sidebarItem(Icons.account_balance_wallet_outlined,
+                        'Finance & Caisse', 3),
+                    _sidebarItem(Icons.assignment_outlined,
+                        'Bons de Caisse', 4),          // ← NOUVEAU
+                  ],
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Divider(height: 1, thickness: 1, color: Color(0x10000000)),
+                    child: Divider(
+                        height: 1, thickness: 1, color: Color(0x10000000)),
                   ),
                   _sidebarItem(
                     Icons.person_outline_rounded,
                     'Mon Profil',
-                    _hasFinanceAccess ? 4 : 3,   // ← index dynamique
+                    _hasFinanceAccess ? 5 : 3,        // ← décalé à 5
                   ),
                 ],
               ),
             ),
-
-            // Pied de Sidebar : Utilisateur connecté
             _buildSidebarUserCard(user),
           ],
         ),
@@ -303,12 +314,13 @@ class _CashierHomeState extends State<CashierHome> {
             ),
             child: Row(
               children: [
-                // Indicateur vertical signature Windows 11
                 Container(
                   width: 3.5,
                   height: 18,
                   decoration: BoxDecoration(
-                    color: selected ? const Color(0xFF0067C0) : Colors.transparent,
+                    color: selected
+                        ? const Color(0xFF0067C0)
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -316,7 +328,9 @@ class _CashierHomeState extends State<CashierHome> {
                 Icon(
                   icon,
                   size: 18,
-                  color: selected ? const Color(0xFF0067C0) : const Color(0xFF64748B),
+                  color: selected
+                      ? const Color(0xFF0067C0)
+                      : const Color(0xFF64748B),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -324,8 +338,11 @@ class _CashierHomeState extends State<CashierHome> {
                     label,
                     style: TextStyle(
                       fontFamily: kAppFontFamily,
-                      color: selected ? const Color(0xFF0067C0) : const Color(0xFF1E293B),
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected
+                          ? const Color(0xFF0067C0)
+                          : const Color(0xFF1E293B),
+                      fontWeight:
+                      selected ? FontWeight.w700 : FontWeight.w500,
                       fontSize: 13,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -340,7 +357,9 @@ class _CashierHomeState extends State<CashierHome> {
   }
 
   Widget _buildSidebarUserCard(UserModel? user) {
-    final initials = user?.username.isNotEmpty == true ? user!.username[0].toUpperCase() : 'C';
+    final initials = user?.username.isNotEmpty == true
+        ? user!.username[0].toUpperCase()
+        : 'C';
 
     return Container(
       margin: const EdgeInsets.all(12),
@@ -397,7 +416,8 @@ class _CashierHomeState extends State<CashierHome> {
           IconButton(
             tooltip: 'Déconnexion',
             splashRadius: 16,
-            icon: const Icon(Icons.logout_rounded, color: Color(0xFF64748B), size: 17),
+            icon: const Icon(Icons.logout_rounded,
+                color: Color(0xFF64748B), size: 17),
             onPressed: () => _confirmLogout(context),
           ),
         ],
@@ -406,7 +426,7 @@ class _CashierHomeState extends State<CashierHome> {
   }
 
   // ---------------------------------------------------------------------------
-  // TOP BAR DESKTOP (Style Fluent sobre & Fil d'Ariane)
+  // TOP BAR DESKTOP
   // ---------------------------------------------------------------------------
   Widget _buildTopBar(UserModel? user) {
     final titles = [
@@ -414,9 +434,12 @@ class _CashierHomeState extends State<CashierHome> {
       'Ventes & Factures',
       'Répertoire Clients',
       if (_hasFinanceAccess) 'Finance & Caisse',
+      if (_hasFinanceAccess) 'Bons de Caisse',   // ← NOUVEAU
       'Mon Profil',
     ];
-    final initials = user?.username.isNotEmpty == true ? user!.username[0].toUpperCase() : 'C';
+    final initials = user?.username.isNotEmpty == true
+        ? user!.username[0].toUpperCase()
+        : 'C';
 
     return Container(
       height: 56,
@@ -429,7 +452,6 @@ class _CashierHomeState extends State<CashierHome> {
       ),
       child: Row(
         children: [
-          // Fil d'Ariane professionnel
           Row(
             children: [
               const Text(
@@ -449,7 +471,7 @@ class _CashierHomeState extends State<CashierHome> {
                 ),
               ),
               Text(
-                titles[_selectedIndex],
+                titles[_selectedIndex.clamp(0, titles.length - 1)],
                 style: const TextStyle(
                   fontFamily: kAppFontFamily,
                   fontSize: 15,
@@ -460,10 +482,7 @@ class _CashierHomeState extends State<CashierHome> {
               ),
             ],
           ),
-
           const Spacer(),
-
-          // Indicateur guichet ouvert
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
@@ -496,8 +515,6 @@ class _CashierHomeState extends State<CashierHome> {
             ),
           ),
           const SizedBox(width: 14),
-
-          // Bouton Notifications
           Container(
             width: 34,
             height: 34,
@@ -513,8 +530,6 @@ class _CashierHomeState extends State<CashierHome> {
             ),
           ),
           const SizedBox(width: 12),
-
-          // Avatar profil
           CircleAvatar(
             radius: 16,
             backgroundColor: const Color(0xFFE8F2FB),
@@ -606,15 +621,22 @@ class _CashierHomeState extends State<CashierHome> {
             ),
             const Divider(height: 1, color: Color(0x12000000)),
             const SizedBox(height: 12),
-            _mobileDrawerItem(Icons.dashboard_outlined, 'Tableau de bord', 0),
-            _mobileDrawerItem(Icons.shopping_bag_outlined, 'Ventes & Tickets', 1),
-            _mobileDrawerItem(Icons.people_outline_rounded, 'Répertoire Clients', 2),
-            if (_hasFinanceAccess)
-              _mobileDrawerItem(Icons.account_balance_wallet_outlined, 'Finance', 3),
+            _mobileDrawerItem(
+                Icons.dashboard_outlined, 'Tableau de bord', 0),
+            _mobileDrawerItem(
+                Icons.shopping_bag_outlined, 'Ventes & Tickets', 1),
+            _mobileDrawerItem(Icons.people_outline_rounded,
+                'Répertoire Clients', 2),
+            if (_hasFinanceAccess) ...[
+              _mobileDrawerItem(Icons.account_balance_wallet_outlined,
+                  'Finance', 3),
+              _mobileDrawerItem(Icons.assignment_outlined,
+                  'Bons de Caisse', 4),            // ← NOUVEAU
+            ],
             _mobileDrawerItem(
               Icons.person_outline_rounded,
               'Mon Profil',
-              _hasFinanceAccess ? 4 : 3,
+              _hasFinanceAccess ? 5 : 3,
             ),
             const Spacer(),
             _buildSidebarUserCard(user),
@@ -648,15 +670,20 @@ class _CashierHomeState extends State<CashierHome> {
                 Icon(
                   icon,
                   size: 19,
-                  color: selected ? const Color(0xFF0067C0) : const Color(0xFF64748B),
+                  color: selected
+                      ? const Color(0xFF0067C0)
+                      : const Color(0xFF64748B),
                 ),
                 const SizedBox(width: 14),
                 Text(
                   label,
                   style: TextStyle(
                     fontFamily: kAppFontFamily,
-                    color: selected ? const Color(0xFF0067C0) : const Color(0xFF1E293B),
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected
+                        ? const Color(0xFF0067C0)
+                        : const Color(0xFF1E293B),
+                    fontWeight:
+                    selected ? FontWeight.w700 : FontWeight.w500,
                     fontSize: 13.5,
                   ),
                 ),
@@ -676,7 +703,7 @@ class _CashierHomeState extends State<CashierHome> {
       const BottomNavigationBarItem(
         icon: Icon(Icons.dashboard_outlined),
         activeIcon: Icon(Icons.dashboard_rounded),
-        label: 'Dashboard',
+        label: 'Accueil',
       ),
       const BottomNavigationBarItem(
         icon: Icon(Icons.shopping_bag_outlined),
@@ -688,12 +715,18 @@ class _CashierHomeState extends State<CashierHome> {
         activeIcon: Icon(Icons.people_rounded),
         label: 'Clients',
       ),
-      if (_hasFinanceAccess)
+      if (_hasFinanceAccess) ...[
         const BottomNavigationBarItem(
           icon: Icon(Icons.account_balance_wallet_outlined),
           activeIcon: Icon(Icons.account_balance_wallet_rounded),
           label: 'Finance',
         ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.assignment_outlined),
+          activeIcon: Icon(Icons.assignment_rounded),
+          label: 'Bons',                   // ← NOUVEAU
+        ),
+      ],
       const BottomNavigationBarItem(
         icon: Icon(Icons.person_outline_rounded),
         activeIcon: Icon(Icons.person_rounded),
@@ -709,9 +742,13 @@ class _CashierHomeState extends State<CashierHome> {
       selectedItemColor: const Color(0xFF0067C0),
       unselectedItemColor: const Color(0xFF64748B),
       selectedLabelStyle: const TextStyle(
-          fontFamily: kAppFontFamily, fontSize: 11, fontWeight: FontWeight.w700),
+          fontFamily: kAppFontFamily,
+          fontSize: 10,
+          fontWeight: FontWeight.w700),
       unselectedLabelStyle: const TextStyle(
-          fontFamily: kAppFontFamily, fontSize: 11, fontWeight: FontWeight.w500),
+          fontFamily: kAppFontFamily,
+          fontSize: 10,
+          fontWeight: FontWeight.w500),
       items: items,
     );
   }

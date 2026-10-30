@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:tek_app/screens/cashier/print/receipt_printer.dart';
 import 'package:tek_app/theme/app_theme.dart';
@@ -23,6 +24,9 @@ class _CashierNewSaleState extends State<CashierNewSale>
   List<Map<String, dynamic>> _stocks = [];
   List<SaleLine> _saleLines = [];
 
+  // Contrôleurs de quantité par produit (clé = productId)
+  final Map<int, TextEditingController> _qtyControllers = {};
+
   // Sélections
   int? _selectedClientId;
   int? _selectedDepotId;
@@ -37,6 +41,8 @@ class _CashierNewSaleState extends State<CashierNewSale>
   final TextEditingController _searchCtrl = TextEditingController();
   final TextEditingController _remiseCtrl = TextEditingController(text: '0');
   final TextEditingController _notesCtrl = TextEditingController();
+  final TextEditingController _clientLibreCtrl = TextEditingController();
+  final TextEditingController _montantPayeCtrl = TextEditingController(text: '0');
 
   // Animation
   late AnimationController _animationController;
@@ -60,6 +66,12 @@ class _CashierNewSaleState extends State<CashierNewSale>
     _searchCtrl.dispose();
     _remiseCtrl.dispose();
     _notesCtrl.dispose();
+    _clientLibreCtrl.dispose();
+    _montantPayeCtrl.dispose();
+    for (final ctrl in _qtyControllers.values) {
+      ctrl.dispose();
+    }
+    _qtyControllers.clear();
     _animationController.dispose();
     super.dispose();
   }
@@ -114,16 +126,16 @@ class _CashierNewSaleState extends State<CashierNewSale>
                   ? Icons.warning_rounded
                   : Icons.error_outline_rounded,
               color: Colors.white,
-              size: 18,
+              size: 16,
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 message,
                 style: const TextStyle(
                   fontFamily: kAppFontFamily,
                   fontWeight: FontWeight.w500,
-                  fontSize: 13,
+                  fontSize: 12.5,
                 ),
               ),
             ),
@@ -138,20 +150,19 @@ class _CashierNewSaleState extends State<CashierNewSale>
   }
 
   // ---------------------------------------------------------------------------
-  // GESTION DU PANIER (Inchangé)
+  // GESTION DU PANIER
   // ---------------------------------------------------------------------------
   void _addProduct(Product product) {
-    final existingIndex =
-    _saleLines.indexWhere((line) => line.productId == product.id);
+    final existingIndex = _saleLines.indexWhere((line) => line.productId == product.id);
 
     if (existingIndex != -1) {
       setState(() {
         _saleLines[existingIndex] = _saleLines[existingIndex].copyWith(
           quantity: _saleLines[existingIndex].quantity + 1,
-          total: _saleLines[existingIndex].unitPrice *
-              (_saleLines[existingIndex].quantity + 1),
+          total: _saleLines[existingIndex].unitPrice * (_saleLines[existingIndex].quantity + 1),
         );
       });
+      _syncQtyController(product.id);
     } else {
       setState(() {
         _saleLines.add(SaleLine(
@@ -163,11 +174,15 @@ class _CashierNewSaleState extends State<CashierNewSale>
           total: product.prixVente,
         ));
       });
+      _qtyControllers[product.id] = TextEditingController(text: '1');
     }
-    _showSnackBar('${product.nom} ajouté au panier', const Color(0xFF107C41));
+    _showSnackBar('${product.nom} ajouté', const Color(0xFF107C41));
   }
 
   void _removeProduct(int index) {
+    final productId = _saleLines[index].productId;
+    _qtyControllers[productId]?.dispose();
+    _qtyControllers.remove(productId);
     setState(() => _saleLines.removeAt(index));
   }
 
@@ -183,46 +198,75 @@ class _CashierNewSaleState extends State<CashierNewSale>
         total: line.unitPrice * newQuantity,
       );
     });
+    _syncQtyController(_saleLines[index].productId);
+  }
+
+  void _syncQtyController(int productId) {
+    final line = _saleLines.firstWhere(
+          (l) => l.productId == productId,
+      orElse: () => SaleLine(
+        productId: productId,
+        productName: '',
+        productCode: '',
+        unitPrice: 0,
+        quantity: 0,
+        total: 0,
+      ),
+    );
+    if (line.quantity <= 0) return;
+    final ctrl = _qtyControllers[productId];
+    if (ctrl != null && ctrl.text != '${line.quantity}') {
+      ctrl.text = '${line.quantity}';
+      ctrl.selection = TextSelection.collapsed(offset: ctrl.text.length);
+    }
+  }
+
+  void _clearSaleLines() {
+    for (final ctrl in _qtyControllers.values) {
+      ctrl.dispose();
+    }
+    _qtyControllers.clear();
+    _saleLines.clear();
   }
 
   // ---------------------------------------------------------------------------
-  // CALCULS (Inchangé)
+  // CALCULS
   // ---------------------------------------------------------------------------
-  double get _subtotal {
-    return _saleLines.fold(0, (sum, line) => sum + line.total);
-  }
+  double get _subtotal => _saleLines.fold(0, (sum, line) => sum + line.total);
 
   double get _remiseValue {
     final value = double.tryParse(_remiseCtrl.text) ?? 0;
-    return value.clamp(0, 100);
+    return value.clamp(0, _subtotal);
   }
 
-  double get _remiseAmount {
-    return _subtotal * (_remiseValue / 100);
+  double get _remiseAmount => _remiseValue;
+  double get _total => _subtotal - _remiseAmount;
+
+  double get _montantPaye {
+    final v = double.tryParse(_montantPayeCtrl.text) ?? 0;
+    return v.clamp(0, _total);
   }
 
-  double get _total {
-    return _subtotal - _remiseAmount;
-  }
+  double get _resteAPayer => _total - _montantPaye;
 
   // ---------------------------------------------------------------------------
-  // ENREGISTREMENT DE LA VENTE (Inchangé)
+  // ENREGISTREMENT DE LA VENTE
   // ---------------------------------------------------------------------------
   Future<void> _saveSale() async {
-    if (_selectedClientId == null) {
-      _showSnackBar('Veuillez sélectionner un client', const Color(0xFFD97706));
+    if (_estVenteARetirer && _selectedClientId == null) {
+      _showSnackBar('Sélectionnez un client enregistré pour un retrait', const Color(0xFFD97706));
       return;
     }
     if (_estVenteARetirer && _dateRetrait == null) {
-      _showSnackBar('Veuillez choisir la date de retrait', const Color(0xFFD97706));
+      _showSnackBar('Choisissez la date de retrait', const Color(0xFFD97706));
       return;
     }
     if (_selectedDepotId == null) {
-      _showSnackBar('Veuillez sélectionner un dépôt', const Color(0xFFD97706));
+      _showSnackBar('Sélectionnez un dépôt', const Color(0xFFD97706));
       return;
     }
     if (_saleLines.isEmpty) {
-      _showSnackBar('Ajoutez au moins un produit au panier', const Color(0xFFD97706));
+      _showSnackBar('Le panier est vide', const Color(0xFFD97706));
       return;
     }
 
@@ -231,7 +275,7 @@ class _CashierNewSaleState extends State<CashierNewSale>
     try {
       final user = Provider.of<AuthProvider>(context, listen: false).user;
       if (user == null) {
-        _showSnackBar('Utilisateur non connecté', const Color(0xFFC42B1C));
+        _showSnackBar('Session expirée', const Color(0xFFC42B1C));
         return;
       }
 
@@ -246,25 +290,39 @@ class _CashierNewSaleState extends State<CashierNewSale>
           .toList();
 
       final result = await service.createSale(
-        clientId: _selectedClientId!,
+        clientId: _selectedClientId,
+        clientNomLibre: _selectedClientId == null && _clientLibreCtrl.text.trim().isNotEmpty
+            ? _clientLibreCtrl.text.trim()
+            : null,
         depotSourceId: _selectedDepotId!,
         dateVente: DateTime.now().toIso8601String().split('T').first,
         lignes: lignes,
         remise: _remiseValue,
+        remiseType: 'montant',
         modeLivraison: _selectedModeLivraison,
         notes: _notesCtrl.text.isNotEmpty ? _notesCtrl.text : null,
         dateRetrait: _estVenteARetirer && _dateRetrait != null
             ? _dateRetrait!.toIso8601String().split('T').first
             : null,
+        montantPayeInitial: _montantPaye,
       );
 
       final numeroFacture = result['numero_facture'] as String? ?? 'N/A';
+      final clientNomLibreResult = result['client_nom_libre'] as String?;
 
-      final client = _clients.firstWhere(
-            (c) => c['id'] == _selectedClientId,
-        orElse: () => {'nom': 'Client inconnu'},
-      );
-      final clientName = client['nom'] as String? ?? 'Client inconnu';
+      String clientName;
+      if (_selectedClientId != null) {
+        final client = _clients.firstWhere(
+              (c) => c['id'] == _selectedClientId,
+          orElse: () => {'nom': 'Client inconnu'},
+        );
+        clientName = client['nom'] as String? ?? 'Client inconnu';
+      } else {
+        clientName = clientNomLibreResult ??
+            (_clientLibreCtrl.text.trim().isNotEmpty
+                ? _clientLibreCtrl.text.trim()
+                : 'Client comptoir');
+      }
 
       final depot = _depots.where((d) => d.id == _selectedDepotId).firstOrNull;
       final depotName = depot?.nom ?? 'Point de vente';
@@ -281,6 +339,8 @@ class _CashierNewSaleState extends State<CashierNewSale>
         saleData: {
           'numero_facture': numeroFacture,
           'mode_livraison': _selectedModeLivraison,
+          'montant_paye': _montantPaye,
+          'reste_a_payer': _resteAPayer,
         },
         lignes: printLines,
         clientName: clientName,
@@ -289,16 +349,20 @@ class _CashierNewSaleState extends State<CashierNewSale>
         remise: _remiseAmount,
         total: _total,
         numeroFacture: numeroFacture,
+        montantPaye: _montantPaye,
+        resteAPayer: _resteAPayer,
       );
 
       setState(() {
-        _saleLines.clear();
+        _clearSaleLines();
         _selectedClientId = null;
         _remiseCtrl.text = '0';
         _notesCtrl.clear();
         _searchCtrl.clear();
         _estVenteARetirer = false;
         _dateRetrait = null;
+        _clientLibreCtrl.clear();
+        _montantPayeCtrl.text = '0';
       });
     } catch (e) {
       _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
@@ -308,7 +372,7 @@ class _CashierNewSaleState extends State<CashierNewSale>
   }
 
   // ---------------------------------------------------------------------------
-  // DIALOGUE D'IMPRESSION (Design Windows 11 Fluent)
+  // DIALOGUE D'IMPRESSION
   // ---------------------------------------------------------------------------
   void _showPrintDialog({
     required Map<String, dynamic> saleData,
@@ -319,6 +383,8 @@ class _CashierNewSaleState extends State<CashierNewSale>
     required double remise,
     required double total,
     required String numeroFacture,
+    required double montantPaye,
+    required double resteAPayer,
   }) {
     showDialog(
       context: context,
@@ -327,25 +393,25 @@ class _CashierNewSaleState extends State<CashierNewSale>
         backgroundColor: const Color(0xFFFFFFFF),
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 12),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 14, 24, 18),
+        titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
                 color: const Color(0xFFE6F4EA),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.check_circle_rounded, color: Color(0xFF107C41), size: 20),
+              child: const Icon(Icons.check_circle_rounded, color: Color(0xFF107C41), size: 18),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             const Text(
-              'Vente enregistrée avec succès',
+              'Vente clôturée avec succès',
               style: TextStyle(
                 fontFamily: kAppFontFamily,
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF0F172A),
               ),
@@ -357,20 +423,15 @@ class _CashierNewSaleState extends State<CashierNewSale>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Le ticket a été clôturé. Souhaitez-vous générer le reçu thermique maintenant ?',
-              style: TextStyle(
-                fontFamily: kAppFontFamily,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w400,
-                color: Color(0xFF64748B),
-              ),
+              'Ticket enregistré. Souhaitez-vous imprimer le reçu client ?',
+              style: TextStyle(fontFamily: kAppFontFamily, fontSize: 12, color: Color(0xFF64748B)),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: const Color(0x14000000)),
               ),
               child: _buildReceiptPreview(
@@ -381,6 +442,8 @@ class _CashierNewSaleState extends State<CashierNewSale>
                 subtotal: subtotal,
                 remise: remise,
                 total: total,
+                montantPaye: montantPaye,
+                resteAPayer: resteAPayer,
               ),
             ),
           ],
@@ -391,14 +454,7 @@ class _CashierNewSaleState extends State<CashierNewSale>
               Navigator.pop(dialogContext);
               Navigator.pop(context);
             },
-            child: const Text(
-              'Terminer sans imprimer',
-              style: TextStyle(
-                fontFamily: kAppFontFamily,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF64748B),
-              ),
-            ),
+            child: const Text('Fermer', style: TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF64748B))),
           ),
           ElevatedButton.icon(
             onPressed: () async {
@@ -414,25 +470,21 @@ class _CashierNewSaleState extends State<CashierNewSale>
                   total: total,
                   numeroFacture: numeroFacture,
                 );
-                _showSnackBar('Reçu imprimé avec succès', const Color(0xFF107C41));
+                _showSnackBar('Ticket envoyé à l\'imprimante', const Color(0xFF107C41));
               } catch (_) {
-                _showSnackBar('Reçu archivé numériquement', const Color(0xFF0067C0));
+                _showSnackBar('Reçu archivé', const Color(0xFF0067C0));
               }
               if (mounted) Navigator.pop(context);
             },
-            icon: const Icon(Icons.print_outlined, size: 17),
-            label: const Text('Imprimer le reçu client'),
+            icon: const Icon(Icons.print_outlined, size: 16),
+            label: const Text('Imprimer reçu'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0067C0),
               foregroundColor: Colors.white,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              textStyle: const TextStyle(
-                fontFamily: kAppFontFamily,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              textStyle: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 12.5),
             ),
           ),
         ],
@@ -448,104 +500,79 @@ class _CashierNewSaleState extends State<CashierNewSale>
     required double subtotal,
     required double remise,
     required double total,
+    required double montantPaye,
+    required double resteAPayer,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: const [
-            Icon(Icons.receipt_long_outlined, color: Color(0xFF0067C0), size: 16),
-            SizedBox(width: 8),
-            Text(
-              'Aperçu du ticket de caisse',
-              style: TextStyle(
-                fontFamily: kAppFontFamily,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                color: Color(0xFF0F172A),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
         _buildReceiptLine('Facture', numeroFacture),
         _buildReceiptLine('Client', clientName),
-        _buildReceiptLine('Point de vente', depotName),
-        const Divider(height: 12, thickness: 1, color: Color(0x12000000)),
+        _buildReceiptLine('Dépôt', depotName),
+        const Divider(height: 10, thickness: 1, color: Color(0x12000000)),
         ...lignes.take(3).map((line) {
           final nom = line['produit_nom'] as String? ?? 'Article';
           final qte = line['quantite'] as int? ?? 0;
           final prix = (line['prix_unitaire'] as num?)?.toDouble() ?? 0.0;
           return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
+            padding: const EdgeInsets.symmetric(vertical: 1.5),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: Text(
                     '$qte x $nom',
-                    style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 12, color: Color(0xFF0F172A)),
+                    style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, color: Color(0xFF0F172A)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Text(
                   '${(qte * prix).toStringAsFixed(2)} \$',
-                  style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                  style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
                 ),
               ],
             ),
           );
         }),
-        const Divider(height: 12, thickness: 1, color: Color(0x12000000)),
+        const Divider(height: 10, thickness: 1, color: Color(0x12000000)),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Total Net TTC',
-              style: TextStyle(
-                fontFamily: kAppFontFamily,
-                fontWeight: FontWeight.w700,
-                fontSize: 13.5,
-                color: Color(0xFF0F172A),
-              ),
-            ),
-            Text(
-              '${total.toStringAsFixed(2)} \$',
-              style: const TextStyle(
-                fontFamily: kAppFontFamily,
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
-                color: Color(0xFF0067C0),
-              ),
-            ),
+            const Text('Total Net TTC', style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF0F172A))),
+            Text('${total.toStringAsFixed(2)} \$', style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF0067C0))),
           ],
         ),
+        if (resteAPayer > 0) ...[
+          const SizedBox(height: 4),
+          _buildReceiptLine('Payé', '\$${montantPaye.toStringAsFixed(2)}'),
+          _buildReceiptLine('Reste à payer', '\$${resteAPayer.toStringAsFixed(2)}', isWarning: true),
+        ],
       ],
     );
   }
 
-  Widget _buildReceiptLine(String label, String value) {
+  Widget _buildReceiptLine(String label, String value, {bool isWarning = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1.5),
+      padding: const EdgeInsets.symmetric(vertical: 1),
       child: Row(
         children: [
           Text(
             '$label : ',
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: kAppFontFamily,
-              fontSize: 11.5,
-              color: Color(0xFF64748B),
-              fontWeight: FontWeight.w500,
+              fontSize: 11,
+              color: isWarning ? const Color(0xFFD97706) : const Color(0xFF64748B),
+              fontWeight: isWarning ? FontWeight.w700 : FontWeight.w500,
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: kAppFontFamily,
                 fontSize: 11.5,
-                color: Color(0xFF0F172A),
+                color: isWarning ? const Color(0xFFD97706) : const Color(0xFF0F172A),
                 fontWeight: FontWeight.w600,
               ),
               maxLines: 1,
@@ -568,21 +595,21 @@ class _CashierNewSaleState extends State<CashierNewSale>
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         child: Container(
-          padding: const EdgeInsets.all(22),
-          width: 440,
-          height: 480,
+          padding: const EdgeInsets.all(18),
+          width: 420,
+          height: 460,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(7),
+                    padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color: const Color(0xFFE8F2FB),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: const Icon(Icons.person_search_outlined, color: Color(0xFF0067C0), size: 18),
+                    child: const Icon(Icons.person_search_outlined, color: Color(0xFF0067C0), size: 17),
                   ),
                   const SizedBox(width: 10),
                   const Expanded(
@@ -590,7 +617,7 @@ class _CashierNewSaleState extends State<CashierNewSale>
                       'Sélectionner un compte client',
                       style: TextStyle(
                         fontFamily: kAppFontFamily,
-                        fontSize: 15,
+                        fontSize: 14.5,
                         fontWeight: FontWeight.w700,
                         color: Color(0xFF0F172A),
                       ),
@@ -603,13 +630,13 @@ class _CashierNewSaleState extends State<CashierNewSale>
                   ),
                 ],
               ),
-              const Divider(height: 20, thickness: 1, color: Color(0x14000000)),
+              const Divider(height: 16, thickness: 1, color: Color(0x14000000)),
               Expanded(
                 child: _clients.isEmpty
                     ? const Center(
                   child: Text(
                     'Aucun client enregistré',
-                    style: TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF94A3B8), fontSize: 13),
+                    style: TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF94A3B8), fontSize: 12.5),
                   ),
                 )
                     : ListView.separated(
@@ -622,10 +649,11 @@ class _CashierNewSaleState extends State<CashierNewSale>
                     final isSelected = _selectedClientId == client['id'];
 
                     return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                       leading: CircleAvatar(
-                        radius: 14,
+                        radius: 13,
                         backgroundColor: isSelected ? const Color(0xFF0067C0) : const Color(0xFFE8F2FB),
                         child: Text(
                           name.isNotEmpty ? name[0].toUpperCase() : 'C',
@@ -633,7 +661,7 @@ class _CashierNewSaleState extends State<CashierNewSale>
                             fontFamily: kAppFontFamily,
                             color: isSelected ? Colors.white : const Color(0xFF0067C0),
                             fontWeight: FontWeight.w700,
-                            fontSize: 11,
+                            fontSize: 10.5,
                           ),
                         ),
                       ),
@@ -643,14 +671,14 @@ class _CashierNewSaleState extends State<CashierNewSale>
                           fontFamily: kAppFontFamily,
                           fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                           color: const Color(0xFF0F172A),
-                          fontSize: 13,
+                          fontSize: 12.5,
                         ),
                       ),
                       subtitle: phone.isNotEmpty
-                          ? Text(phone, style: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF64748B), fontSize: 11.5))
+                          ? Text(phone, style: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF64748B), fontSize: 11))
                           : null,
                       trailing: isSelected
-                          ? const Icon(Icons.check_circle_rounded, color: Color(0xFF0067C0), size: 18)
+                          ? const Icon(Icons.check_circle_rounded, color: Color(0xFF0067C0), size: 17)
                           : null,
                       onTap: () {
                         setState(() => _selectedClientId = client['id'] as int);
@@ -676,11 +704,11 @@ class _CashierNewSaleState extends State<CashierNewSale>
       backgroundColor: const Color(0xFFF1F3F7),
       appBar: AppBar(
         title: const Text(
-          'Point de Vente — Nouvelle Vente & Encaissement',
+          'Point de Vente — Caisse & Facturation',
           style: TextStyle(
             fontFamily: kAppFontFamily,
             fontWeight: FontWeight.w700,
-            fontSize: 16,
+            fontSize: 15.5,
             color: Color(0xFF0F172A),
           ),
         ),
@@ -690,7 +718,6 @@ class _CashierNewSaleState extends State<CashierNewSale>
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
           onPressed: () => Navigator.pop(context),
-          tooltip: 'Retour',
         ),
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
@@ -717,18 +744,15 @@ class _CashierNewSaleState extends State<CashierNewSale>
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // LAYOUT DESKTOP (Catalogue 60% / Panier & Encaissement 40%)
-  // ---------------------------------------------------------------------------
   Widget _buildDesktopLayout() {
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(flex: 6, child: _buildProductPanel()),
-          const SizedBox(width: 18),
-          Expanded(flex: 4, child: _buildCartPanel()),
+          Expanded(flex: 55, child: _buildProductPanel()),
+          const SizedBox(width: 12),
+          Expanded(flex: 45, child: _buildCartPanel()),
         ],
       ),
     );
@@ -736,11 +760,11 @@ class _CashierNewSaleState extends State<CashierNewSale>
 
   Widget _buildMobileLayout() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(10),
       child: Column(
         children: [
-          SizedBox(height: 480, child: _buildProductPanel()),
-          const SizedBox(height: 16),
+          SizedBox(height: 400, child: _buildProductPanel()),
+          const SizedBox(height: 10),
           _buildCartPanel(),
         ],
       ),
@@ -758,95 +782,74 @@ class _CashierNewSaleState extends State<CashierNewSale>
         p.code.toLowerCase().contains(_searchCtrl.text.toLowerCase())).toList();
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFFFFFFFF),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0x18000000), width: 1),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x06000000),
-            blurRadius: 10,
-            offset: Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F2FB),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF0067C0), size: 18),
-              ),
-              const SizedBox(width: 10),
+              const Icon(Icons.inventory_2_outlined, color: Color(0xFF0067C0), size: 17),
+              const SizedBox(width: 8),
               const Text(
-                'Catalogue des Articles',
+                'Catalogue Articles',
                 style: TextStyle(
                   fontFamily: kAppFontFamily,
-                  fontSize: 14.5,
+                  fontSize: 14,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF0F172A),
                 ),
               ),
               const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '${filteredProducts.length} référence(s)',
-                  style: const TextStyle(
-                    fontFamily: kAppFontFamily,
-                    color: Color(0xFF64748B),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
+              Text(
+                '${filteredProducts.length} référence(s)',
+                style: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  color: Color(0xFF64748B),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
           SizedBox(
-            height: 38,
+            height: 32,
             child: TextField(
               controller: _searchCtrl,
               onChanged: (_) => setState(() {}),
-              style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 13),
+              style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 12),
               decoration: InputDecoration(
                 hintText: 'Rechercher par code ou article...',
-                hintStyle: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFFA0AEC0), fontSize: 12.5),
-                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF6B7280), size: 18),
+                hintStyle: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFFA0AEC0), fontSize: 11.5),
+                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF6B7280), size: 16),
                 filled: true,
                 fillColor: const Color(0xFFF8FAFC),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.5)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.4)),
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
           Expanded(
             child: filteredProducts.isEmpty
                 ? const Center(
               child: Text(
-                'Aucun article correspondant',
-                style: TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF94A3B8), fontSize: 13),
+                'Aucun article trouvé',
+                style: TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF94A3B8), fontSize: 12),
               ),
             )
                 : ListView.separated(
               itemCount: filteredProducts.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 6),
+              separatorBuilder: (_, __) => const SizedBox(height: 4),
               itemBuilder: (context, index) {
                 final product = filteredProducts[index];
                 return _buildProductRow(product);
@@ -866,34 +869,26 @@ class _CashierNewSaleState extends State<CashierNewSale>
         .fold(0, (sum, line) => sum + line.quantity);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: quantityInCart > 0 ? const Color(0xFFE8F2FB).withOpacity(0.5) : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8),
+        color: quantityInCart > 0 ? const Color(0xFFE8F2FB).withOpacity(0.4) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(
-          color: quantityInCart > 0 ? const Color(0xFF0067C0).withOpacity(0.4) : const Color(0x10000000),
+          color: quantityInCart > 0 ? const Color(0xFF0067C0).withOpacity(0.35) : const Color(0x10000000),
         ),
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFFFFF),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: const Color(0x14000000)),
-            ),
-            child: Text(
-              product.code,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1E293B),
-              ),
+          Text(
+            product.code,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF475569),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
 
           Expanded(
             child: Column(
@@ -904,41 +899,19 @@ class _CashierNewSaleState extends State<CashierNewSale>
                   style: const TextStyle(
                     fontFamily: kAppFontFamily,
                     fontWeight: FontWeight.w700,
-                    fontSize: 13,
+                    fontSize: 12.5,
                     color: Color(0xFF0F172A),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  '${product.unite} • Stock dispo: $stockDisponible',
-                  style: const TextStyle(
-                    fontFamily: kAppFontFamily,
-                    color: Color(0xFF64748B),
-                    fontSize: 11.5,
-                  ),
+                  '${product.unite} • Stock: $stockDisponible',
+                  style: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF64748B), fontSize: 10.5),
                 ),
               ],
             ),
           ),
-
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-            decoration: BoxDecoration(
-              color: hasStock ? const Color(0xFFE6F4EA) : const Color(0xFFFDE8E8),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              hasStock ? 'En stock' : 'Rupture',
-              style: TextStyle(
-                fontFamily: kAppFontFamily,
-                color: hasStock ? const Color(0xFF107C41) : const Color(0xFFC42B1C),
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
 
           Text(
             '${product.prixVente.toStringAsFixed(2)} \$',
@@ -946,13 +919,13 @@ class _CashierNewSaleState extends State<CashierNewSale>
               fontFamily: kAppFontFamily,
               fontWeight: FontWeight.w700,
               color: Color(0xFF0067C0),
-              fontSize: 13.5,
+              fontSize: 13,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
 
           SizedBox(
-            height: 32,
+            height: 28,
             child: ElevatedButton(
               onPressed: hasStock ? () => _addProduct(product) : null,
               style: ElevatedButton.styleFrom(
@@ -963,8 +936,8 @@ class _CashierNewSaleState extends State<CashierNewSale>
                 elevation: 0,
               ),
               child: quantityInCart > 0
-                  ? Text('+$quantityInCart', style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 12))
-                  : const Icon(Icons.add_rounded, size: 16),
+                  ? Text('+$quantityInCart', style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 11))
+                  : const Icon(Icons.add_rounded, size: 15),
             ),
           ),
         ],
@@ -973,164 +946,161 @@ class _CashierNewSaleState extends State<CashierNewSale>
   }
 
   // ---------------------------------------------------------------------------
-  // PANNEAU DROIT : PANIER SCROLLABLE AVEC STICKY CHECKOUT (ANTI-DÉBORDEMENT)
+  // PANNEAU DROIT : PANIER AÉRÉ & RESPIRANT
   // ---------------------------------------------------------------------------
   Widget _buildCartPanel() {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFFFFFFF),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0x18000000), width: 1),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x06000000),
-            blurRadius: 10,
-            offset: Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // En-tête Panier + Sélecteurs fixes
+          // 1. EN-TÊTE COMPACT (Client & Dépôt côte-à-côte sur 1 seule ligne)
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(7),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F2FB),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Icon(Icons.shopping_cart_outlined, color: Color(0xFF0067C0), size: 18),
-                    ),
-                    const SizedBox(width: 10),
+                    const Icon(Icons.shopping_cart_outlined, color: Color(0xFF0067C0), size: 16),
+                    const SizedBox(width: 6),
                     const Text(
-                      'Panier de Vente',
+                      'Panier',
                       style: TextStyle(
                         fontFamily: kAppFontFamily,
-                        fontSize: 14.5,
+                        fontSize: 13.5,
                         fontWeight: FontWeight.w700,
                         color: Color(0xFF0F172A),
                       ),
                     ),
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        '${_saleLines.length} article(s)',
+                        '${_saleLines.length} art.',
                         style: const TextStyle(
                           fontFamily: kAppFontFamily,
                           color: Color(0xFF64748B),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                _buildClientSelector(),
-                const SizedBox(height: 8),
-                _buildDepotSelector(),
+                const SizedBox(height: 6),
+
+                // Ligne unique regroupant Client et Dépôt
+                Row(
+                  children: [
+                    Expanded(child: _buildClientSelector()),
+                    const SizedBox(width: 6),
+                    Expanded(child: _buildDepotSelector()),
+                  ],
+                ),
+
+                if (_selectedClientId == null && !_estVenteARetirer) ...[
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 30,
+                    child: TextField(
+                      controller: _clientLibreCtrl,
+                      style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5),
+                      decoration: InputDecoration(
+                        hintText: 'Nom client au comptoir (optionnel)',
+                        hintStyle: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFFA0AEC0), fontSize: 11),
+                        prefixIcon: const Icon(Icons.edit_note_rounded, size: 15, color: Color(0xFF64748B)),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.4)),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
 
           const Divider(height: 1, thickness: 1, color: Color(0x12000000)),
 
-          // ZONE CENTRALE SCROLLABLE : Articles + Options de Livraison / Date de Retrait
+          // 2. ZONE CENTRALE : GRANDE LISTE DES PRODUITS VISIBLE EN TOUT TEMPS
           Expanded(
             child: _saleLines.isEmpty
                 ? Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
-                  Icon(Icons.remove_shopping_cart_outlined, size: 36, color: Color(0xFF94A3B8)),
-                  SizedBox(height: 10),
+                  Icon(Icons.remove_shopping_cart_outlined, size: 32, color: Color(0xFF94A3B8)),
+                  SizedBox(height: 6),
                   Text(
-                    'Votre panier est vide',
-                    style: TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF0F172A), fontWeight: FontWeight.w600, fontSize: 13.5),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Cliquez sur (+) sur un article pour l\'ajouter',
-                    style: TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF94A3B8), fontSize: 12),
+                    'Panier vide',
+                    style: TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF64748B), fontWeight: FontWeight.w600, fontSize: 12.5),
                   ),
                 ],
               ),
             )
                 : ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               children: [
-                // Liste des articles ajoutés
+                // Liste principale des articles
                 ..._saleLines.asMap().entries.map((entry) {
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.only(bottom: 4),
                     child: _buildCartRow(entry.value, entry.key),
                   );
                 }),
 
-                const SizedBox(height: 12),
-                const Divider(height: 1, thickness: 1, color: Color(0x12000000)),
-                const SizedBox(height: 12),
+                const SizedBox(height: 6),
 
-                // Section Livraison, Retrait différé & Notes dans le flux scrollable
-                _buildDeliveryAndNotes(),
-                const SizedBox(height: 8),
+                // Section Livraison repliable
+                _buildCollapsibleDeliverySection(),
               ],
             ),
           ),
 
-          // ZONE BASSE FIXE (STICKY FOOTER) : Totaux Financiers & Bouton d'Encaissement
+          // 3. PIED DE CAISSE (STICKY FOOTER) ULTRA-COMPACT ET AÉRÉ
           if (_saleLines.isNotEmpty) ...[
             Container(
               decoration: const BoxDecoration(
                 color: Color(0xFFFFFFFF),
-                border: Border(
-                  top: BorderSide(color: Color(0x14000000), width: 1),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0x06000000),
-                    blurRadius: 10,
-                    offset: Offset(0, -3),
-                  ),
-                ],
+                border: Border(top: BorderSide(color: Color(0x14000000), width: 1)),
               ),
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildTotalsSummary(),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 6),
                   SizedBox(
-                    height: 44,
+                    height: 38,
                     child: ElevatedButton.icon(
                       onPressed: _isSubmitting ? null : _saveSale,
                       icon: _isSubmitting
                           ? const SizedBox(
-                        width: 16,
-                        height: 16,
+                        width: 15,
+                        height: 15,
                         child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)),
                       )
-                          : const Icon(Icons.check_rounded, size: 18),
+                          : const Icon(Icons.check_rounded, size: 17),
                       label: Text(
                         _isSubmitting
                             ? 'Traitement...'
-                            : 'Finaliser la vente (${_total.toStringAsFixed(2)} \$)',
+                            : 'Valider l\'encaissement (${_total.toStringAsFixed(2)} \$)',
                         style: const TextStyle(
                           fontFamily: kAppFontFamily,
-                          fontSize: 13.5,
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -1138,7 +1108,7 @@ class _CashierNewSaleState extends State<CashierNewSale>
                         backgroundColor: const Color(0xFF0067C0),
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                       ),
                     ),
                   ),
@@ -1151,26 +1121,33 @@ class _CashierNewSaleState extends State<CashierNewSale>
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // LIGNE DE PRODUIT DU PANIER (ALIGNEMENT STRICTEMENT CENTRÉ)
+  // ---------------------------------------------------------------------------
   Widget _buildCartRow(SaleLine line, int index) {
+    final qtyCtrl = _qtyControllers[line.productId];
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: const Color(0x10000000)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   line.productName,
                   style: const TextStyle(
                     fontFamily: kAppFontFamily,
                     fontWeight: FontWeight.w700,
-                    fontSize: 12.5,
+                    fontSize: 12,
                     color: Color(0xFF0F172A),
                   ),
                   maxLines: 1,
@@ -1178,70 +1155,128 @@ class _CashierNewSaleState extends State<CashierNewSale>
                 ),
                 Text(
                   '${line.unitPrice.toStringAsFixed(2)} \$ / u',
-                  style: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF64748B), fontSize: 11),
+                  style: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF64748B), fontSize: 10.5),
                 ),
               ],
             ),
           ),
 
+          // Boutons - / champ quantité / + (Alignement vertical parfait)
           Row(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               InkWell(
                 onTap: () => _updateQuantity(index, line.quantity - 1),
                 borderRadius: BorderRadius.circular(4),
                 child: Container(
-                  width: 24,
-                  height: 24,
+                  width: 26,
+                  height: 26,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFFFFF),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: const Color(0x18000000)),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
                   ),
-                  child: const Icon(Icons.remove_rounded, size: 14, color: Color(0xFF0F172A)),
+                  child: const Icon(Icons.remove_rounded, size: 13, color: Color(0xFF0F172A)),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: Text(
-                  '${line.quantity}',
-                  style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 12.5),
+              const SizedBox(width: 4),
+
+              SizedBox(
+                width: 46,
+                height: 26,
+                child: TextField(
+                  key: ValueKey('qty_${line.productId}'),
+                  controller: qtyCtrl,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  textAlignVertical: TextAlignVertical.center, // 👈 Centre verticalement le texte
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  style: const TextStyle(
+                    fontFamily: kAppFontFamily,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    color: Color(0xFF0F172A),
+                  ),
+                  decoration: InputDecoration(
+                    contentPadding: EdgeInsets.zero,
+                    filled: true,
+                    fillColor: Colors.white,
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.4), // 👈 Bleu primaire au focus
+                    ),
+                  ),
+                  onChanged: (value) {
+                    final parsed = int.tryParse(value) ?? 0;
+                    if (parsed > 0) {
+                      setState(() {
+                        final current = _saleLines[index];
+                        _saleLines[index] = current.copyWith(
+                          quantity: parsed,
+                          total: current.unitPrice * parsed,
+                        );
+                      });
+                    }
+                  },
+                  onSubmitted: (value) {
+                    final parsed = int.tryParse(value) ?? 0;
+                    if (parsed <= 0) {
+                      _removeProduct(index);
+                    } else {
+                      _updateQuantity(index, parsed);
+                    }
+                  },
                 ),
               ),
+              const SizedBox(width: 4),
+
               InkWell(
                 onTap: () => _updateQuantity(index, line.quantity + 1),
                 borderRadius: BorderRadius.circular(4),
                 child: Container(
-                  width: 24,
-                  height: 24,
+                  width: 26,
+                  height: 26,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFFFFF),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: const Color(0x18000000)),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
                   ),
-                  child: const Icon(Icons.add_rounded, size: 14, color: Color(0xFF0F172A)),
+                  child: const Icon(Icons.add_rounded, size: 13, color: Color(0xFF0F172A)),
                 ),
               ),
             ],
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
 
-          Text(
-            '${line.total.toStringAsFixed(2)} \$',
-            style: const TextStyle(
-              fontFamily: kAppFontFamily,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-              color: Color(0xFF0067C0),
+          SizedBox(
+            width: 60,
+            child: Text(
+              '${line.total.toStringAsFixed(2)} \$',
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontFamily: kAppFontFamily,
+                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+                color: Color(0xFF0067C0),
+              ),
             ),
           ),
-          const SizedBox(width: 4),
 
           IconButton(
-            splashRadius: 14,
-            icon: const Icon(Icons.delete_outline_rounded, size: 17, color: Color(0xFFC42B1C)),
+            splashRadius: 12,
+            icon: const Icon(Icons.close_rounded, size: 16, color: Color(0xFFC42B1C)),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
             onPressed: () => _removeProduct(index),
@@ -1251,40 +1286,39 @@ class _CashierNewSaleState extends State<CashierNewSale>
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // SÉLECTEURS CLIENT & DÉPÔT
-  // ---------------------------------------------------------------------------
   Widget _buildClientSelector() {
     final selectedClient = _clients.firstWhere((c) => c['id'] == _selectedClientId, orElse: () => {});
-    final clientName = selectedClient['nom'] as String? ?? 'Sélectionner un compte client *';
+    final clientName = selectedClient['nom'] as String? ?? 'Client *';
 
     return InkWell(
       onTap: _showClientDialog,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(6),
       child: Container(
-        height: 38,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
           color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(6),
           border: Border.all(color: _selectedClientId != null ? const Color(0xFF0067C0) : const Color(0xFFE2E8F0)),
         ),
         child: Row(
           children: [
-            Icon(Icons.person_outline_rounded, color: _selectedClientId != null ? const Color(0xFF0067C0) : const Color(0xFF64748B), size: 18),
-            const SizedBox(width: 8),
+            Icon(Icons.person_outline_rounded, color: _selectedClientId != null ? const Color(0xFF0067C0) : const Color(0xFF64748B), size: 15),
+            const SizedBox(width: 6),
             Expanded(
               child: Text(
                 clientName,
                 style: TextStyle(
                   fontFamily: kAppFontFamily,
-                  color: _selectedClientId != null ? const Color(0xFF0F172A) : const Color(0xFFA0AEC0),
+                  color: _selectedClientId != null ? const Color(0xFF0F172A) : const Color(0xFF64748B),
                   fontWeight: _selectedClientId != null ? FontWeight.w700 : FontWeight.w500,
-                  fontSize: 12.5,
+                  fontSize: 11.5,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF64748B)),
+            const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF64748B), size: 18),
           ],
         ),
       ),
@@ -1293,30 +1327,33 @@ class _CashierNewSaleState extends State<CashierNewSale>
 
   Widget _buildDepotSelector() {
     return Container(
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: DropdownButton<int>(
         value: _selectedDepotId,
         isExpanded: true,
         underline: const SizedBox.shrink(),
-        dropdownColor: const Color(0xFFFFFFFF),
-        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B), size: 18),
-        // ✅ Après (corrigé avec .toList())
+        dropdownColor: Colors.white, // 👈 Fond blanc du menu déroulant
+        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B), size: 16),
         items: _depots.map((depot) {
           return DropdownMenuItem(
             value: depot.id,
             child: Row(
               children: [
-                Icon(depot.estMagasin ? Icons.storefront_outlined : Icons.warehouse_outlined, color: const Color(0xFF0067C0), size: 16),
-                const SizedBox(width: 8),
-                Text(
-                  depot.nom,
-                  style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                Icon(depot.estMagasin ? Icons.storefront_outlined : Icons.warehouse_outlined, color: const Color(0xFF0067C0), size: 14),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    depot.nom,
+                    style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
@@ -1326,8 +1363,8 @@ class _CashierNewSaleState extends State<CashierNewSale>
           setState(() {
             _selectedDepotId = value;
             if (_saleLines.isNotEmpty) {
-              _showSnackBar('Dépôt modifié, panier réinitialisé', const Color(0xFFD97706));
-              _saleLines.clear();
+              _showSnackBar('Dépôt modifié, panier vidé', const Color(0xFFD97706));
+              _clearSaleLines();
             }
           });
         },
@@ -1336,58 +1373,103 @@ class _CashierNewSaleState extends State<CashierNewSale>
   }
 
   // ---------------------------------------------------------------------------
-  // CALCULS & RÉSUMÉ DU PANIER
+  // PIED DE TOTAUX COMPACT ET LISIBLE
   // ---------------------------------------------------------------------------
   Widget _buildTotalsSummary() {
+    final aUnCredit = _resteAPayer > 0;
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0x10000000)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         children: [
-          _summaryLine('Sous-total brut', '${_subtotal.toStringAsFixed(2)} \$'),
-          if (_remiseAmount > 0)
-            _summaryLine('Remise (${_remiseValue.toStringAsFixed(0)}%)', '- ${_remiseAmount.toStringAsFixed(2)} \$', isDiscount: true),
-          const SizedBox(height: 6),
+          // Ligne 1 : Sous-total & Saisies rapides sur la même ligne
           Row(
             children: [
-              const Text(
-                'Remise (%) : ',
-                style: TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+              Text(
+                'Brut: ${_subtotal.toStringAsFixed(2)} \$',
+                style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11, fontWeight: FontWeight.w500, color: Color(0xFF64748B)),
               ),
+              const Spacer(),
+
+              // Saisie Remise
+              const Text('Remise: ', style: TextStyle(fontFamily: kAppFontFamily, fontSize: 11, color: Color(0xFF64748B))),
               SizedBox(
-                width: 54,
-                height: 28,
+                width: 52,
+                height: 24,
                 child: TextField(
                   controller: _remiseCtrl,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: (_) => setState(() {}),
-                  style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 12, fontWeight: FontWeight.w700),
+                  style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFC42B1C)),
                   decoration: InputDecoration(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                     filled: true,
                     fillColor: Colors.white,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.4)), // 👈 Bleu focus
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Saisie Montant Payé
+              const Text('Payé: ', style: TextStyle(fontFamily: kAppFontFamily, fontSize: 11, color: Color(0xFF64748B))),
+              SizedBox(
+                width: 58,
+                height: 24,
+                child: TextField(
+                  controller: _montantPayeCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (_) => setState(() {}),
+                  style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF107C41)),
+                  decoration: InputDecoration(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.4)), // 👈 Bleu focus
                   ),
                 ),
               ),
             ],
           ),
-          const Divider(height: 12, thickness: 1, color: Color(0x12000000)),
+          const Divider(height: 10, thickness: 1, color: Color(0x10000000)),
+
+          // Ligne 2 : Total Net & Reste dû
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Net à payer TTC',
-                style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 13.5, color: Color(0xFF0F172A)),
+              Row(
+                children: [
+                  const Text('Net: ', style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF0F172A))),
+                  Text(
+                    '${_total.toStringAsFixed(2)} \$',
+                    style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF0067C0)),
+                  ),
+                ],
               ),
-              Text(
-                '${_total.toStringAsFixed(2)} \$',
-                style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFF0067C0)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: aUnCredit ? const Color(0xFFFEF3C7) : const Color(0xFFE6F4EA),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  aUnCredit ? 'Reste: ${_resteAPayer.toStringAsFixed(2)} \$' : 'Soldé',
+                  style: TextStyle(
+                    fontFamily: kAppFontFamily,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: aUnCredit ? const Color(0xFFC42B1C) : const Color(0xFF107C41),
+                  ),
+                ),
               ),
             ],
           ),
@@ -1396,147 +1478,99 @@ class _CashierNewSaleState extends State<CashierNewSale>
     );
   }
 
-  Widget _summaryLine(String label, String value, {bool isDiscount = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1.5),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: kAppFontFamily,
-              color: isDiscount ? const Color(0xFFC42B1C) : const Color(0xFF64748B),
-              fontSize: 12,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontFamily: kAppFontFamily,
-              color: isDiscount ? const Color(0xFFC42B1C) : const Color(0xFF0F172A),
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ---------------------------------------------------------------------------
-  // WIDGET DATE PICKER & OPTIONS LIVRAISON (WINDOWS 11 FLUENT 2 REFONDU)
+  // SECTION LIVRAISON & NOTES REPLIABLE (ACCORDÉON)
   // ---------------------------------------------------------------------------
-  Widget _buildDeliveryAndNotes() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // --- Panneau de Retrait Différé Fluent 2 ---
-        _buildPickupSchedulerTile(),
-        const SizedBox(height: 10),
-
-        // --- Mode de Livraison ---
-        DropdownButtonFormField<String>(
-          value: _selectedModeLivraison,
-          style: const TextStyle(
-            fontFamily: kAppFontFamily,
-            fontSize: 12.5,
-            color: Color(0xFF0F172A),
-            fontWeight: FontWeight.w500,
-          ),
-          decoration: InputDecoration(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            filled: true,
-            fillColor: const Color(0xFFF8FAFC),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.5)),
-          ),
-          items: const [
-            DropdownMenuItem(value: 'retrait_magasin', child: Text('Retrait direct au comptoir (Magasin)')),
-            DropdownMenuItem(value: 'retrait_grand_depot', child: Text('Retrait au grand dépôt logistique')),
-            DropdownMenuItem(value: 'retrait_troisieme_depot', child: Text('Retrait au dépôt annexe')),
-          ],
-          onChanged: (val) => setState(() => _selectedModeLivraison = val!),
-        ),
-        const SizedBox(height: 8),
-
-        // --- Champ Notes & Référence ---
-        TextField(
-          controller: _notesCtrl,
-          maxLines: 1,
-          style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 12.5),
-          decoration: InputDecoration(
-            hintText: 'Notes ou référence client (optionnel)',
-            hintStyle: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFFA0AEC0), fontSize: 12),
-            filled: true,
-            fillColor: const Color(0xFFF8FAFC),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.5)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Composant Date Picker Fluent avec raccourcis rapides et dialogue thématisé
-  Widget _buildPickupSchedulerTile() {
+  Widget _buildCollapsibleDeliverySection() {
     return Container(
       decoration: BoxDecoration(
-        color: _estVenteARetirer ? const Color(0xFFE8F2FB).withOpacity(0.35) : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: _estVenteARetirer ? const Color(0xFF0067C0).withOpacity(0.35) : const Color(0xFFE2E8F0),
-          width: 1,
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0x14000000)),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          dense: true,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+          childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          leading: const Icon(Icons.local_shipping_outlined, size: 16, color: Color(0xFF64748B)),
+          title: Text(
+            _estVenteARetirer ? 'Retrait différé activé' : 'Options de livraison & Notes',
+            style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+          ),
+          children: [
+            _buildPickupSchedulerTile(),
+            const SizedBox(height: 6),
+            DropdownButtonFormField<String>(
+              value: _selectedModeLivraison,
+              dropdownColor: Colors.white, // 👈 Fond blanc du menu déroulant
+              style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, color: Color(0xFF0F172A)),
+              decoration: InputDecoration(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.4)), // 👈 Bleu focus
+              ),
+              items: const [
+                DropdownMenuItem(value: 'retrait_magasin', child: Text('Retrait magasin (Comptoir)')),
+                DropdownMenuItem(value: 'retrait_grand_depot', child: Text('Grand dépôt logistique')),
+                DropdownMenuItem(value: 'retrait_troisieme_depot', child: Text('Dépôt annexe')),
+              ],
+              onChanged: (val) => setState(() => _selectedModeLivraison = val!),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              height: 32,
+              child: TextField(
+                controller: _notesCtrl,
+                style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5),
+                decoration: InputDecoration(
+                  hintText: 'Notes ou référence client...',
+                  hintStyle: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFFA0AEC0), fontSize: 11),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.4)), // 👈 Bleu focus
+                ),
+              ),
+            ),
+          ],
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    );
+  }
+
+  Widget _buildPickupSchedulerTile() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: _estVenteARetirer ? const Color(0xFFE8F2FB) : Colors.white,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: _estVenteARetirer ? const Color(0xFF0067C0) : const Color(0xFFE2E8F0)),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: _estVenteARetirer ? const Color(0xFFE8F2FB) : const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Icon(
-                  Icons.calendar_month_outlined,
-                  size: 17,
-                  color: _estVenteARetirer ? const Color(0xFF0067C0) : const Color(0xFF64748B),
-                ),
-              ),
-              const SizedBox(width: 10),
+              const Icon(Icons.event_available_rounded, size: 16, color: Color(0xFF0067C0)),
+              const SizedBox(width: 6),
               const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Retrait différé',
-                      style: TextStyle(
-                        fontFamily: kAppFontFamily,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    Text(
-                      'Planifier une date de mise à disposition',
-                      style: TextStyle(
-                        fontFamily: kAppFontFamily,
-                        fontSize: 11,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                ),
+                child: Text('Retrait programmé ultérieur', style: TextStyle(fontFamily: kAppFontFamily, fontSize: 11, fontWeight: FontWeight.w600)),
               ),
+              // 👈 Switch stylisé actif & inactif
               Switch(
                 value: _estVenteARetirer,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                activeColor: const Color(0xFF0067C0),
+                activeTrackColor: const Color(0xFFE8F2FB),
+                inactiveThumbColor: const Color(0xFF94A3B8),
+                inactiveTrackColor: const Color(0xFFE2E8F0),
+                trackOutlineColor: MaterialStateProperty.all(Colors.transparent),
                 onChanged: (v) => setState(() {
                   _estVenteARetirer = v;
                   if (!v) {
@@ -1545,67 +1579,32 @@ class _CashierNewSaleState extends State<CashierNewSale>
                     _dateRetrait ??= DateTime.now().add(const Duration(days: 1));
                   }
                 }),
-                activeColor: const Color(0xFF0067C0),
               ),
             ],
           ),
-
           if (_estVenteARetirer) ...[
-            const SizedBox(height: 10),
-            const Divider(height: 1, thickness: 1, color: Color(0x140067C0)),
-            const SizedBox(height: 10),
-
-            // Bouton Sélecteur de Calendrier Thématisé Windows 11
+            const SizedBox(height: 4),
             InkWell(
               onTap: _openFluentDatePicker,
-              borderRadius: BorderRadius.circular(8),
               child: Container(
-                height: 38,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                height: 28,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFFFFF),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF0067C0), width: 1.2),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFF0067C0)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.event_available_rounded, size: 16, color: Color(0xFF0067C0)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _dateRetrait == null
-                            ? 'Sélectionner la date de retrait *'
-                            : 'Mise à disposition le ${_formatFrenchDate(_dateRetrait!)}',
-                        style: TextStyle(
-                          fontFamily: kAppFontFamily,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: _dateRetrait == null ? const Color(0xFFA0AEC0) : const Color(0xFF0F172A),
-                        ),
-                      ),
+                    const Icon(Icons.calendar_today_rounded, size: 13, color: Color(0xFF0067C0)),
+                    const SizedBox(width: 6),
+                    Text(
+                      _dateRetrait == null ? 'Choisir date *' : 'Prévu le ${_formatFrenchDate(_dateRetrait!)}',
+                      style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
                     ),
-                    const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF0067C0)),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-
-            // Raccourcis Rapides (Demain, 3j, 1 sem)
-            Row(
-              children: [
-                _buildDateShortcutChip('Demain', () {
-                  setState(() => _dateRetrait = DateTime.now().add(const Duration(days: 1)));
-                }),
-                const SizedBox(width: 6),
-                _buildDateShortcutChip('Dans 3 jours', () {
-                  setState(() => _dateRetrait = DateTime.now().add(const Duration(days: 3)));
-                }),
-                const SizedBox(width: 6),
-                _buildDateShortcutChip('Dans 1 semaine', () {
-                  setState(() => _dateRetrait = DateTime.now().add(const Duration(days: 7)));
-                }),
-              ],
             ),
           ],
         ],
@@ -1613,30 +1612,7 @@ class _CashierNewSaleState extends State<CashierNewSale>
     );
   }
 
-  Widget _buildDateShortcutChip(String label, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFFFFF),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0x18000000)),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontFamily: kAppFontFamily,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF475569),
-          ),
-        ),
-      ),
-    );
-  }
-
+  // 👈 Date picker restauré avec le thème Windows 11 Fluent 2
   Future<void> _openFluentDatePicker() async {
     final picked = await showDatePicker(
       context: context,
@@ -1678,7 +1654,7 @@ class _CashierNewSaleState extends State<CashierNewSale>
 }
 
 // ---------------------------------------------------------------------------
-// MODÈLE SALE LINE (Inchangé)
+// MODÈLE SALE LINE
 // ---------------------------------------------------------------------------
 class SaleLine {
   final int productId;

@@ -115,7 +115,7 @@ class _StockDetailViewState extends State<StockDetailView>
   }
 
   // ---------------------------------------------------------------------------
-  // EXPORT / IMPRESSION (Dialogue Desktop Windows 11)
+  // EXPORT / IMPRESSION
   // ---------------------------------------------------------------------------
   void _showExportOptions() {
     showDialog(
@@ -296,7 +296,7 @@ class _StockDetailViewState extends State<StockDetailView>
   }
 
   // ---------------------------------------------------------------------------
-  // APP BAR WINDOWS 11 FLUENT
+  // APP BAR
   // ---------------------------------------------------------------------------
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
@@ -371,18 +371,12 @@ class _StockDetailViewState extends State<StockDetailView>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 1. Les 4 Cartes Métriques Stylisées avec Ondes Fluides
         _buildDetailMetricsRow(totalStock, isAlerte),
         const SizedBox(height: 20),
-
-        // 2. Fiche d'identité produit
         _buildProductCard(totalStock, isAlerte),
         const SizedBox(height: 20),
-
-        // 3. Répartition logistique par site
         _buildStockHeader(),
         const SizedBox(height: 12),
-
         if (_stocks.isEmpty)
           _buildEmptyStock()
         else
@@ -392,7 +386,7 @@ class _StockDetailViewState extends State<StockDetailView>
   }
 
   // ---------------------------------------------------------------------------
-  // 1. STATS ROW AVEC ONDES FLUIDES (WINDOWS BLOOM)
+  // 1. STATS ROW
   // ---------------------------------------------------------------------------
   Widget _buildDetailMetricsRow(int totalStock, bool isAlerte) {
     final valorisation = (_product?.prixVente ?? 0.0) * totalStock;
@@ -572,7 +566,6 @@ class _StockDetailViewState extends State<StockDetailView>
               ],
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
             child: Column(
@@ -631,7 +624,7 @@ class _StockDetailViewState extends State<StockDetailView>
   }
 
   // ---------------------------------------------------------------------------
-  // 2. CARTE PRODUIT
+  // 2. CARTE PRODUIT (Prix d'achat & Marge supprimés)
   // ---------------------------------------------------------------------------
   Widget _buildProductCard(int totalStock, bool isAlerte) {
     return Container(
@@ -739,7 +732,7 @@ class _StockDetailViewState extends State<StockDetailView>
           const Divider(height: 1, thickness: 1, color: Color(0x12000000)),
           const SizedBox(height: 14),
 
-          // Ligne de statistiques financières
+          // Ligne de statistiques (sans prix d'achat ni marge)
           Wrap(
             spacing: 12,
             runSpacing: 10,
@@ -750,19 +743,9 @@ class _StockDetailViewState extends State<StockDetailView>
                 color: const Color(0xFF0067C0),
               ),
               _buildStatItem(
-                label: "Prix d'achat",
-                value: "${_product!.prixAchat.toStringAsFixed(2)} \$",
-                color: const Color(0xFF475569),
-              ),
-              _buildStatItem(
                 label: "Seuil d'alerte",
                 value: "${_product!.seuilAlerte} ${_product!.unite}",
                 color: const Color(0xFFB45309),
-              ),
-              _buildStatItem(
-                label: "Marge unitaire",
-                value: "${(_product!.prixVente - _product!.prixAchat).toStringAsFixed(2)} \$",
-                color: const Color(0xFF107C41),
               ),
             ],
           ),
@@ -933,8 +916,6 @@ class _StockDetailViewState extends State<StockDetailView>
             ],
           ),
           const SizedBox(height: 12),
-
-          // Barre de niveau de stock
           Row(
             children: [
               Expanded(
@@ -963,8 +944,6 @@ class _StockDetailViewState extends State<StockDetailView>
             ],
           ),
           const SizedBox(height: 10),
-
-          // Détail des quantités
           Row(
             children: [
               _buildQuantityMetric(label: 'Min (Alerte)', value: stock.quantiteMinimale, color: const Color(0xFFB45309)),
@@ -1079,7 +1058,7 @@ class _StockDetailViewState extends State<StockDetailView>
 }
 
 // ---------------------------------------------------------------------------
-// PAINTER VECTORIEL : ONDES FLUIDES DES CARTES DE DÉTAIL STOCK
+// PAINTER VECTORIEL
 // ---------------------------------------------------------------------------
 class StockDetailWavePainter extends CustomPainter {
   final double waveSeed;

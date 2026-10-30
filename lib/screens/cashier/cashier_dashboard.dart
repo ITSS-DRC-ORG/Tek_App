@@ -8,6 +8,14 @@ import 'package:tek_app/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../api/admin_service.dart';
 
+// Helper global : parse une valeur (String, num, null) en double
+double _toDouble(dynamic v) {
+  if (v == null) return 0.0;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? 0.0;
+  return 0.0;
+}
+
 class CashierDashboard extends StatefulWidget {
   const CashierDashboard({super.key});
 
@@ -72,7 +80,7 @@ class _CashierDashboardState extends State<CashierDashboard>
   }
 
   // ---------------------------------------------------------------------------
-  // NAVIGATION (Inchangée)
+  // NAVIGATION
   // ---------------------------------------------------------------------------
   void _navigateToSales({String? filter}) {
     Navigator.push(
@@ -97,12 +105,12 @@ class _CashierDashboardState extends State<CashierDashboard>
   // ---------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
-    final todaySales = (_stats['ventes']?['aujourd_hui']?['total'] as num?)?.toDouble() ?? 0.0;
+    final todaySales = _toDouble(_stats['ventes']?['aujourd_hui']?['total']);
     final todayCount = _stats['ventes']?['aujourd_hui']?['nombre'] ?? 0;
-    final monthSales = (_stats['ventes']?['mois']?['total'] as num?)?.toDouble() ?? 0.0;
+    final monthSales = _toDouble(_stats['ventes']?['mois']?['total']);
     final monthCount = _stats['ventes']?['mois']?['nombre'] ?? 0;
     final alertCount = _stats['stocks']?['produits_alerte'] ?? 0;
-    final soldeCaisse = (_stats['caisse']?['solde'] as num?)?.toDouble() ?? 0.0;
+    final soldeCaisse = _toDouble(_stats['caisse']?['solde']);
 
     return Material(
       color: Colors.transparent,
@@ -120,7 +128,6 @@ class _CashierDashboardState extends State<CashierDashboard>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Les 4 Cartes Métriques Stylisées avec Ondes Fluides
               _buildStatsRow(
                 todaySales: todaySales,
                 todayCount: todayCount,
@@ -130,12 +137,8 @@ class _CashierDashboardState extends State<CashierDashboard>
                 soldeCaisse: soldeCaisse,
               ),
               const SizedBox(height: 18),
-
-              // 2. Deuxième rangée : Top Produits + Comparatif
               _buildSecondRow(),
               const SizedBox(height: 18),
-
-              // 3. Activité Récente (Tableau/Flux de Session)
               _buildRecentActivitySection(),
             ],
           ),
@@ -145,7 +148,7 @@ class _CashierDashboardState extends State<CashierDashboard>
   }
 
   // ---------------------------------------------------------------------------
-  // 1. STATS ROW AVEC ONDES FLUIDES VECTORIELLES (WINDOWS BLOOM)
+  // 1. STATS ROW
   // ---------------------------------------------------------------------------
   Widget _buildStatsRow({
     required double todaySales,
@@ -166,11 +169,7 @@ class _CashierDashboardState extends State<CashierDashboard>
             subtitle: "$todayCount ticket${todayCount > 1 ? 's' : ''}",
             badge: "Aujourd'hui",
             icon: Icons.today_rounded,
-            gradient: const [
-              Color(0xFF004E8C),
-              Color(0xFF0067C0),
-              Color(0xFF2886DE),
-            ],
+            gradient: const [Color(0xFF004E8C), Color(0xFF0067C0), Color(0xFF2886DE)],
             waveSeed: 1.2,
           ),
           _buildWaveStatCard(
@@ -179,11 +178,7 @@ class _CashierDashboardState extends State<CashierDashboard>
             subtitle: "$monthCount transaction${monthCount > 1 ? 's' : ''}",
             badge: "Mensuel",
             icon: Icons.calendar_month_rounded,
-            gradient: const [
-              Color(0xFF0A3B5C),
-              Color(0xFF165B8C),
-              Color(0xFF3A89C9),
-            ],
+            gradient: const [Color(0xFF0A3B5C), Color(0xFF165B8C), Color(0xFF3A89C9)],
             waveSeed: 2.4,
           ),
           _buildWaveStatCard(
@@ -192,11 +187,7 @@ class _CashierDashboardState extends State<CashierDashboard>
             subtitle: "Disponible au tiroir",
             badge: "Caisse",
             icon: Icons.account_balance_wallet_rounded,
-            gradient: const [
-              Color(0xFF1E293B),
-              Color(0xFF334155),
-              Color(0xFF475569),
-            ],
+            gradient: const [Color(0xFF1E293B), Color(0xFF334155), Color(0xFF475569)],
             waveSeed: 3.6,
           ),
           _buildWaveStatCard(
@@ -205,11 +196,7 @@ class _CashierDashboardState extends State<CashierDashboard>
             subtitle: alertCount > 0 ? "Sous surveillance" : "Stock optimal",
             badge: "Stocks",
             icon: Icons.notifications_active_outlined,
-            gradient: const [
-              Color(0xFF0F172A),
-              Color(0xFF1E293B),
-              Color(0xFF2563EB),
-            ],
+            gradient: const [Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF2563EB)],
             waveSeed: 4.8,
           ),
         ];
@@ -277,7 +264,6 @@ class _CashierDashboardState extends State<CashierDashboard>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Bannière supérieure fluide
           SizedBox(
             height: 62,
             child: Stack(
@@ -333,8 +319,6 @@ class _CashierDashboardState extends State<CashierDashboard>
               ],
             ),
           ),
-
-          // Pied de carte blanc
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
             child: Column(
@@ -390,26 +374,20 @@ class _CashierDashboardState extends State<CashierDashboard>
   }
 
   // ---------------------------------------------------------------------------
-  // 2. DEUXIÈME RANGÉE (TOP PRODUITS & COMPARATIF MENSUEL)
+  // 2. DEUXIÈME RANGÉE
   // ---------------------------------------------------------------------------
   Widget _buildSecondRow() {
     final isWide = MediaQuery.of(context).size.width >= 960;
-    final totalEvolution = (_comparaison['evolution']?['total'] ?? 0).toDouble();
-    final pourcentage = (_comparaison['evolution']?['pourcentage'] ?? 0).toDouble();
+    final totalEvolution = _toDouble(_comparaison['evolution']?['total']);
+    final pourcentage = _toDouble(_comparaison['evolution']?['pourcentage']);
 
     if (isWide) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            flex: 13,
-            child: _buildTopProductsCard(),
-          ),
+          Expanded(flex: 13, child: _buildTopProductsCard()),
           const SizedBox(width: 16),
-          Expanded(
-            flex: 11,
-            child: _buildComparisonCard(totalEvolution, pourcentage),
-          ),
+          Expanded(flex: 11, child: _buildComparisonCard(totalEvolution, pourcentage)),
         ],
       );
     } else {
@@ -501,7 +479,7 @@ class _CashierDashboardState extends State<CashierDashboard>
                 final product = entry.value;
                 final nom = product['nom'] as String? ?? 'Article';
                 final quantite = product['quantite'] as int? ?? 0;
-                final total = (product['total'] as num?)?.toDouble() ?? 0.0;
+                final total = _toDouble(product['total']);
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
@@ -556,7 +534,7 @@ class _CashierDashboardState extends State<CashierDashboard>
                       ),
                       const SizedBox(width: 14),
                       Text(
-                        '${total.toStringAsFixed(0)} \$',
+                        '${total.toStringAsFixed(2)} \$',
                         style: const TextStyle(
                           fontFamily: kAppFontFamily,
                           fontSize: 13,
@@ -645,7 +623,7 @@ class _CashierDashboardState extends State<CashierDashboard>
           ),
           const SizedBox(height: 4),
           Text(
-            'Variation nette : ${isPositive ? '+' : ''}${totalEvolution.toStringAsFixed(0)} \$',
+            'Variation nette : ${isPositive ? '+' : ''}${totalEvolution.toStringAsFixed(2)} \$',
             style: const TextStyle(
               fontFamily: kAppFontFamily,
               fontSize: 12.5,
@@ -654,7 +632,6 @@ class _CashierDashboardState extends State<CashierDashboard>
             ),
           ),
           const SizedBox(height: 14),
-          // Barre de progression sobre
           Container(
             width: double.infinity,
             height: 6,
@@ -679,7 +656,7 @@ class _CashierDashboardState extends State<CashierDashboard>
   }
 
   // ---------------------------------------------------------------------------
-  // 3. ACTIVITÉ RÉCENTE DE CAISSE
+  // 3. ACTIVITÉ RÉCENTE
   // ---------------------------------------------------------------------------
   Widget _buildRecentActivitySection() {
     return Container(
@@ -753,7 +730,7 @@ class _CashierDashboardState extends State<CashierDashboard>
     final type = activity['type'] as String? ?? '';
     final reference = activity['reference'] as String? ?? '';
     final date = activity['date'] as String? ?? '';
-    final montant = (activity['montant'] as num?)?.toDouble() ?? 0.0;
+    final montant = _toDouble(activity['montant']);
     final statut = activity['statut'] as String? ?? '';
 
     IconData icon;
@@ -851,7 +828,7 @@ class _CashierDashboardState extends State<CashierDashboard>
 }
 
 // ---------------------------------------------------------------------------
-// PAINTER VECTORIEL : ONDES FLUIDES DES CARTES DU TABLEAU DE BORD CAISSE
+// PAINTER VECTORIEL
 // ---------------------------------------------------------------------------
 class CashierMetricWavePainter extends CustomPainter {
   final double waveSeed;
@@ -878,7 +855,6 @@ class CashierMetricWavePainter extends CustomPainter {
 
     final path = Path();
     path.moveTo(0, size.height * 0.85);
-
     path.cubicTo(
       size.width * 0.28,
       size.height * (0.35 + 0.12 * math.sin(waveSeed)),
@@ -887,11 +863,9 @@ class CashierMetricWavePainter extends CustomPainter {
       size.width,
       size.height * 0.40,
     );
-
     path.lineTo(size.width, size.height);
     path.lineTo(0, size.height);
     path.close();
-
     canvas.drawPath(path, fillPaint);
 
     final ridgePath = Path();

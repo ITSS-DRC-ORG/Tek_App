@@ -1,41 +1,92 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:tek_app/api/admin_service.dart';
-import 'package:tek_app/providers/auth_provider.dart';
-import 'package:tek_app/screens/cashier/cashier_sales.dart';
+import 'package:tek_app/models/user_model.dart';
+import 'package:tek_app/screens/admin/admin_components.dart';
+import 'package:tek_app/screens/cashier/cashier_new_sale.dart';
+import 'package:tek_app/screens/cashier/print/receipt_printer.dart';
 import 'package:tek_app/theme/app_theme.dart';
 
-class InvoiceValidationView extends StatefulWidget {
-  const InvoiceValidationView({super.key});
+import '../../../api/admin_service.dart';
+import '../../../providers/auth_provider.dart';
 
-  @override
-  State<InvoiceValidationView> createState() => _InvoiceValidationViewState();
+// Helper global : parse une valeur (String, num, null) en double
+double _toDouble(dynamic v) {
+  if (v == null) return 0.0;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? 0.0;
+  return 0.0;
 }
 
-class _InvoiceValidationViewState extends State<InvoiceValidationView> {
+class CashierSales extends StatefulWidget {
+  final String? initialFilter;
+  const CashierSales({super.key, this.initialFilter});
+
+  @override
+  State<CashierSales> createState() => _CashierSalesState();
+}
+
+class _CashierSalesState extends State<CashierSales> {
   bool _isLoading = true;
   bool _isActionLoading = false;
-  List<Map<String, dynamic>> _pendingInvoices = [];
+  List<Map<String, dynamic>> _sales = [];
+  List<Map<String, dynamic>> _filteredSales = [];
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _selectedFilter = 'Toutes';
 
   @override
   void initState() {
     super.initState();
-    _loadPendingInvoices();
+    if (widget.initialFilter != null && widget.initialFilter!.isNotEmpty) {
+      _selectedFilter = _normalizeFilter(widget.initialFilter!);
+    }
+    _loadSales();
   }
 
-  Future<void> _loadPendingInvoices() async {
+  String _normalizeFilter(String input) {
+    switch (input) {
+      case 'en_cours':
+        return 'en_cours';
+      case 'payee':
+        return 'payee';
+      case 'livree':
+        return 'livree';
+      case 'annulee':
+        return 'annulee';
+      default:
+        return 'Toutes';
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadSales() async {
     setState(() => _isLoading = true);
     try {
       final user = Provider.of<AuthProvider>(context, listen: false).user;
       if (user != null) {
         final service = AdminService(user.token);
-        final sales = await service.getSales(statut: 'en_cours');
+        final sales = await service.getSales();
+
+        final sortedSales = sales.map((s) => s as Map<String, dynamic>).toList();
+        sortedSales.sort((a, b) {
+          final dateA = DateTime.tryParse(a['created_at'] as String? ?? '');
+          final dateB = DateTime.tryParse(b['created_at'] as String? ?? '');
+          if (dateA == null && dateB == null) return 0;
+          if (dateA == null) return 1;
+          if (dateB == null) return -1;
+          return dateB.compareTo(dateA);
+        });
+
         setState(() {
-          _pendingInvoices =
-              sales.map((s) => s as Map<String, dynamic>).toList();
+          _sales = sortedSales;
           _isLoading = false;
         });
+        _filterSales();
       } else {
         setState(() => _isLoading = false);
       }
@@ -45,10 +96,23 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
     }
   }
 
-  double get _cumulativeTotal {
-    return _pendingInvoices.fold<double>(0.0, (sum, inv) {
-      final t = double.tryParse(inv['total_ttc']?.toString() ?? '0') ?? 0;
-      return sum + t;
+  void _filterSales() {
+    final query = _searchCtrl.text.toLowerCase();
+    setState(() {
+      _filteredSales = _sales.where((sale) {
+        final client = (sale['client_nom'] as String? ??
+            sale['client_nom_libre'] as String? ??
+            '')
+            .toLowerCase();
+        final numero = (sale['numero_facture'] as String? ?? '').toLowerCase();
+        final matchesSearch = client.contains(query) || numero.contains(query);
+
+        final statut = sale['statut'] as String? ?? 'en_cours';
+        final matchesFilter =
+            _selectedFilter == 'Toutes' || statut == _selectedFilter;
+
+        return matchesSearch && matchesFilter;
+      }).toList();
     });
   }
 
@@ -85,51 +149,610 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 960;
+  // ---------------------------------------------------------------------------
+  // VALIDATION D'ENCAISSEMENT
+  // ---------------------------------------------------------------------------
+  Future<void> _validateInvoice(Map<String, dynamic> sale) async {
+    final total = _toDouble(sale['total_ttc']);
+    final paye = _toDouble(sale['montant_paye']);
+    final restant = _toDouble(sale['montant_restant']);
+    final client =
+        sale['client_nom'] ?? sale['client_nom_libre'] ?? 'Client de passage';
+    final numero = sale['numero_facture'] ?? '';
 
-    return Material(
-      color: Colors.transparent,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 1. Indicateurs Synthétiques avec Ondes Fluides
-          _buildCashierMetricsRow(),
-          const SizedBox(height: 18),
+    final montantCtrl = TextEditingController(text: restant.toStringAsFixed(2));
 
-          // 2. Barre de titre et action
-          _buildActionBar(isWide),
-          const SizedBox(height: 14),
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final montantSaisi = double.tryParse(montantCtrl.text) ?? 0;
+          final nouveauRestant =
+          (restant - montantSaisi).clamp(0, double.infinity);
+          final valide = montantSaisi > 0 && montantSaisi <= restant;
 
-          // 3. Tableau de données principal
-          Expanded(
-            child: _isLoading
-                ? const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFF0067C0),
-                strokeWidth: 2.2,
+          return AlertDialog(
+            backgroundColor: const Color(0xFFFFFFFF),
+            surfaceTintColor: Colors.transparent,
+            shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            titlePadding: const EdgeInsets.fromLTRB(22, 20, 22, 12),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 22),
+            actionsPadding: const EdgeInsets.fromLTRB(22, 12, 22, 18),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F2FB),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(Icons.payments_outlined,
+                      color: Color(0xFF0067C0), size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Encaisser la facture',
+                  style: TextStyle(
+                    fontFamily: kAppFontFamily,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Facture $numero — $client',
+                    style: const TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontSize: 12.5,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0x14000000)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildDialogInfoRow(
+                            'Total facture', '${total.toStringAsFixed(2)} \$'),
+                        const SizedBox(height: 4),
+                        _buildDialogInfoRow(
+                            'Déjà payé', '${paye.toStringAsFixed(2)} \$'),
+                        const SizedBox(height: 4),
+                        _buildDialogInfoRow(
+                          'Reste dû',
+                          '${restant.toStringAsFixed(2)} \$',
+                          highlight: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: montantCtrl,
+                    keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) => setDialogState(() {}),
+                    style: const TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Montant à encaisser (\$) *',
+                      labelStyle: const TextStyle(
+                          fontFamily: kAppFontFamily, fontSize: 12.5),
+                      prefixIcon:
+                      const Icon(Icons.attach_money_rounded, size: 18),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide:
+                        const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide:
+                        const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF0067C0), width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: () {
+                          montantCtrl.text = restant.toStringAsFixed(2);
+                          setDialogState(() {});
+                        },
+                        icon: const Icon(Icons.done_all_rounded, size: 14),
+                        label: const Text(
+                          'Solder tout',
+                          style: TextStyle(
+                              fontFamily: kAppFontFamily, fontSize: 11.5),
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF0067C0),
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                        ),
+                      ),
+                      const Spacer(),
+                      if (montantSaisi > 0)
+                        Text(
+                          'Nouveau reste : \$${nouveauRestant.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontFamily: kAppFontFamily,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: nouveauRestant > 0
+                                ? const Color(0xFFB45309)
+                                : const Color(0xFF107C41),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (!valide && montantSaisi > 0)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Le montant doit être compris entre 0 et le reste dû.',
+                        style: TextStyle(
+                          fontFamily: kAppFontFamily,
+                          fontSize: 11,
+                          color: Color(0xFFC42B1C),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-            )
-                : Container(
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text(
+                  'Annuler',
+                  style: TextStyle(
+                    fontFamily: kAppFontFamily,
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                onPressed:
+                valide ? () => Navigator.pop(dialogContext, true) : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0067C0),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text(
+                  valide
+                      ? 'Encaisser ${montantSaisi.toStringAsFixed(2)} \$'
+                      : 'Encaisser',
+                  style: const TextStyle(
+                      fontFamily: kAppFontFamily, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final montant = double.tryParse(montantCtrl.text) ?? 0;
+    if (montant <= 0 || montant > restant) {
+      _showSnackBar('Montant invalide', const Color(0xFFD97706));
+      return;
+    }
+
+    setState(() => _isActionLoading = true);
+
+    try {
+      final user = Provider.of<AuthProvider>(context, listen: false).user;
+      if (user == null) {
+        _showSnackBar('Utilisateur non connecté', const Color(0xFFC42B1C));
+        return;
+      }
+
+      final service = AdminService(user.token);
+      final result = await service.validateInvoiceWithMode(
+        sale['id'] as int,
+        modePaiement: 'cash',
+        montant: montant,
+      );
+
+      if (result['success'] == true) {
+        _showSnackBar(
+          'Encaissement de ${montant.toStringAsFixed(2)} \$ enregistré',
+          const Color(0xFF107C41),
+        );
+        _loadSales();
+      } else {
+        _showSnackBar(
+          'Erreur: ${result['message'] ?? 'Impossible d\'encaisser'}',
+          const Color(0xFFC42B1C),
+        );
+      }
+    } catch (e) {
+      _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
+    } finally {
+      if (mounted) setState(() => _isActionLoading = false);
+    }
+  }
+
+  Widget _buildDialogInfoRow(String label, String value,
+      {bool highlight = false}) {
+    return Row(
+      children: [
+        Text(
+          '$label : ',
+          style: TextStyle(
+            fontFamily: kAppFontFamily,
+            fontWeight: FontWeight.w500,
+            color:
+            highlight ? const Color(0xFFB45309) : const Color(0xFF64748B),
+            fontSize: 12.5,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontFamily: kAppFontFamily,
+              fontWeight: FontWeight.w700,
+              color:
+              highlight ? const Color(0xFFB45309) : const Color(0xFF0F172A),
+              fontSize: 13,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // RÉIMPRESSION THERMIQUE
+  // ---------------------------------------------------------------------------
+  Future<void> _reprintReceipt(Map<String, dynamic> sale) async {
+    try {
+      final numeroFacture = sale['numero_facture'] as String? ?? '';
+      final clientName = sale['client_nom'] ??
+          sale['client_nom_libre'] as String? ??
+          'Client';
+      final depotName = sale['depot_source_nom'] as String? ?? 'Dépôt';
+      final lignes = sale['lignes'] as List? ?? [];
+
+      double subtotal = 0;
+      final printLines = lignes.map((line) {
+        final qte = (line['quantite'] is int)
+            ? line['quantite'] as int
+            : int.tryParse(line['quantite']?.toString() ?? '0') ?? 0;
+        final prix = _toDouble(line['prix_unitaire']);
+        subtotal += qte * prix;
+        return {
+          'produit_nom': line['produit_nom'] ?? 'Produit',
+          'quantite': qte,
+          'prix_unitaire': prix,
+        };
+      }).toList();
+
+      final remise = _toDouble(sale['remise']);
+      final total = _toDouble(sale['total_ttc']);
+      final montantPaye = _toDouble(sale['montant_paye']);
+      final montantRestant = _toDouble(sale['montant_restant']);
+
+      _showReprintDialog(
+        saleData: {
+          'numero_facture': numeroFacture,
+          'mode_livraison': sale['mode_livraison'] ?? 'retrait_magasin',
+          'montant_paye': montantPaye,
+          'reste_a_payer': montantRestant,
+        },
+        lignes: printLines,
+        clientName: clientName,
+        depotName: depotName,
+        subtotal: subtotal,
+        remise: remise,
+        total: total,
+        numeroFacture: numeroFacture,
+        montantPaye: montantPaye,
+        montantRestant: montantRestant,
+      );
+    } catch (e) {
+      _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
+    }
+  }
+
+  void _showReprintDialog({
+    required Map<String, dynamic> saleData,
+    required List<Map<String, dynamic>> lignes,
+    required String clientName,
+    required String depotName,
+    required double subtotal,
+    required double remise,
+    required double total,
+    required String numeroFacture,
+    required double montantPaye,
+    required double montantRestant,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFFFFFFFF),
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        titlePadding: const EdgeInsets.fromLTRB(22, 20, 22, 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 22),
+        actionsPadding: const EdgeInsets.fromLTRB(22, 12, 22, 18),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFFFFF),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0x18000000), width: 1),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x06000000),
-                    blurRadius: 12,
-                    offset: Offset(0, 3),
+                color: const Color(0xFFE8F2FB),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Icon(Icons.print_outlined,
+                  color: Color(0xFF0067C0), size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Réimpression du reçu',
+              style: TextStyle(
+                fontFamily: kAppFontFamily,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Aperçu du ticket à réémettre vers l\'imprimante de caisse :',
+              style: TextStyle(
+                fontFamily: kAppFontFamily,
+                fontSize: 12.5,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0x14000000)),
+              ),
+              child: _buildReceiptPreview(
+                numeroFacture: numeroFacture,
+                clientName: clientName,
+                depotName: depotName,
+                lignes: lignes,
+                total: total,
+                remise: remise,
+                montantPaye: montantPaye,
+                montantRestant: montantRestant,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Fermer',
+                style: TextStyle(
+                    fontFamily: kAppFontFamily, color: Color(0xFF64748B))),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              try {
+                await ReceiptPrinter.printReceipt(
+                  sale: saleData,
+                  lines: lignes,
+                  clientName: clientName,
+                  depotName: depotName,
+                  subtotal: subtotal,
+                  remise: remise,
+                  total: total,
+                  numeroFacture: numeroFacture,
+                  montantPaye: montantPaye,
+                  montantRestant: montantRestant,
+                );
+                _showSnackBar(
+                    'Reçu réimprimé avec succès', const Color(0xFF107C41));
+              } catch (e) {
+                _showSnackBar('Erreur d\'impression: ${e.toString()}',
+                    const Color(0xFFC42B1C));
+              }
+            },
+            icon: const Icon(Icons.print_outlined, size: 16),
+            label: const Text('Lancer l\'impression'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0067C0),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReceiptPreview({
+    required String numeroFacture,
+    required String clientName,
+    required String depotName,
+    required List<Map<String, dynamic>> lignes,
+    required double total,
+    required double remise,
+    required double montantPaye,
+    required double montantRestant,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildReceiptLine('Facture', numeroFacture),
+        _buildReceiptLine('Client', clientName),
+        _buildReceiptLine('Point de vente', depotName),
+        const Divider(height: 12, thickness: 1, color: Color(0x12000000)),
+        ...lignes.take(3).map((line) {
+          final nom = line['produit_nom'] as String? ?? 'Produit';
+          final qte = (line['quantite'] is int)
+              ? line['quantite'] as int
+              : int.tryParse(line['quantite']?.toString() ?? '0') ?? 0;
+          final prix = _toDouble(line['prix_unitaire']);
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 1.5),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    '$qte x $nom',
+                    style: const TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontSize: 11.5,
+                        color: Color(0xFF0F172A)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Text(
+                  '${(qte * prix).toStringAsFixed(2)} \$',
+                  style: const TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF0F172A)),
+                ),
+              ],
+            ),
+          );
+        }),
+        const Divider(height: 12, thickness: 1, color: Color(0x12000000)),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Total Net TTC',
+              style: TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF0F172A)),
+            ),
+            Text(
+              '${total.toStringAsFixed(2)} \$',
+              style: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: Color(0xFF0067C0)),
+            ),
+          ],
+        ),
+        if (montantPaye > 0 || montantRestant > 0) ...[
+          const SizedBox(height: 4),
+          const Divider(height: 1, thickness: 1, color: Color(0x12000000)),
+          const SizedBox(height: 4),
+          _buildReceiptLine('Payé', '\$${montantPaye.toStringAsFixed(2)}'),
+          if (montantRestant > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1.5),
+              child: Row(
+                children: [
+                  const Text(
+                    'Reste à payer : ',
+                    style: TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontSize: 11.5,
+                      color: Color(0xFFB45309),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '\$${montantRestant.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontSize: 12.5,
+                        color: Color(0xFFB45309),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ],
               ),
-              clipBehavior: Clip.antiAlias,
-              child: _pendingInvoices.isEmpty
-                  ? _buildEmptyState()
-                  : isWide
-                  ? _buildDesktopDataTable()
-                  : _buildMobileDataRows(),
+            ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildReceiptLine(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1.5),
+      child: Row(
+        children: [
+          Text(
+            '$label : ',
+            style: const TextStyle(
+                fontFamily: kAppFontFamily,
+                fontSize: 11.5,
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w500),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontSize: 11.5,
+                  color: Color(0xFF0F172A),
+                  fontWeight: FontWeight.w600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -138,50 +761,113 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
   }
 
   // ---------------------------------------------------------------------------
-  // 1. LES CARTES DE MÉTRIQUES STYLISÉES AVEC ONDES FLUIDES (WINDOWS BLOOM)
+  // BUILD PRINCIPAL
   // ---------------------------------------------------------------------------
-  Widget _buildCashierMetricsRow() {
+  @override
+  Widget build(BuildContext context) {
+    final isWide = MediaQuery.of(context).size.width >= 960;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF1F3F7),
+      body: Material(
+        color: Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildSalesMetricsRow(),
+              const SizedBox(height: 18),
+              _buildActionBar(isWide),
+              const SizedBox(height: 14),
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFFFF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0x18000000), width: 1),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x06000000),
+                        blurRadius: 12,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: _isLoading
+                      ? const Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFF0067C0),
+                      strokeWidth: 2.2,
+                    ),
+                  )
+                      : _filteredSales.isEmpty
+                      ? _buildEmptyState()
+                      : isWide
+                      ? _buildDesktopDataTable()
+                      : _buildMobileList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 1. LES CARTES DE MÉTRIQUES
+  // ---------------------------------------------------------------------------
+  Widget _buildSalesMetricsRow() {
+    final total = _sales.length;
+    final enCours =
+        _sales.where((s) => (s['statut'] ?? '') == 'en_cours').length;
+    final cumulTTC = _sales.fold<double>(0.0, (sum, s) {
+      return sum + _toDouble(s['total_ttc']);
+    });
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final isNarrow = constraints.maxWidth < 740;
 
         final cards = [
           _buildWaveMetricCard(
-            title: "FACTURES EN ATTENTE",
-            value: "${_pendingInvoices.length}",
-            subtitle: "Règlements à percevoir",
-            badge: "À Traiter",
+            title: "TOTAL FACTURES",
+            value: "$total",
+            subtitle: "Transactions au comptoir",
+            badge: "Activité",
             icon: Icons.receipt_long_outlined,
             gradient: const [
               Color(0xFF004E8C),
               Color(0xFF0067C0),
-              Color(0xFF2886DE),
+              Color(0xFF2886DE)
             ],
             waveSeed: 1.2,
           ),
           _buildWaveMetricCard(
-            title: "TOTAL À ENCAISSER",
-            value: "${_cumulativeTotal.toStringAsFixed(0)} \$",
-            subtitle: "Montant cumulé TTC",
-            badge: "Encaissement",
-            icon: Icons.payments_outlined,
+            title: "EN COURS D'ENCAISSEMENT",
+            value: "$enCours",
+            subtitle: "Règlements à valider",
+            badge: "À Traiter",
+            icon: Icons.hourglass_empty_rounded,
             gradient: const [
               Color(0xFF0A3B5C),
               Color(0xFF165B8C),
-              Color(0xFF3A89C9),
+              Color(0xFF3A89C9)
             ],
             waveSeed: 2.4,
           ),
           _buildWaveMetricCard(
-            title: "MODE AUTORISÉ",
-            value: "Espèces",
-            subtitle: "Devise : CASH (USD)",
-            badge: "Guichet",
-            icon: Icons.point_of_sale_outlined,
+            title: "VOLUME GLOBAL TTC",
+            value: "${cumulTTC.toStringAsFixed(0)} \$",
+            subtitle: "Chiffre d'affaires facturé",
+            badge: "Trésorerie",
+            icon: Icons.payments_outlined,
             gradient: const [
               Color(0xFF1E293B),
               Color(0xFF334155),
-              Color(0xFF475569),
+              Color(0xFF475569)
             ],
             waveSeed: 3.6,
           ),
@@ -238,7 +924,6 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Bannière supérieure avec ondulations vectorielles
           SizedBox(
             height: 64,
             child: Stack(
@@ -254,11 +939,12 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
                 ),
                 Positioned.fill(
                   child: CustomPaint(
-                    painter: InvoiceMetricWavePainter(waveSeed: waveSeed),
+                    painter: SalesMetricWavePainter(waveSeed: waveSeed),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -272,7 +958,8 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
                         child: Icon(icon, color: Colors.white, size: 16),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.25),
                           borderRadius: BorderRadius.circular(4),
@@ -294,8 +981,6 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
               ],
             ),
           ),
-
-          // Pied de carte blanc avec Métrique & Libellés
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
             child: Row(
@@ -363,54 +1048,122 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
   }
 
   // ---------------------------------------------------------------------------
-  // 2. BARRE D'ACTIONS
+  // 2. BARRE D'ACTIONS & FILTRES
   // ---------------------------------------------------------------------------
   Widget _buildActionBar(bool isWide) {
+    final filters = ['Toutes', 'en_cours', 'payee', 'livree', 'annulee'];
+    final labels = ['Toutes', 'En cours', 'Payées', 'Livrées', 'Annulées'];
+
     return Row(
       children: [
-        const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Validation des Encaissements',
-              style: TextStyle(
-                fontFamily: kAppFontFamily,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF0F172A),
-                letterSpacing: -0.3,
-              ),
+        SizedBox(
+          width: isWide ? 280 : 180,
+          height: 38,
+          child: TextField(
+            controller: _searchCtrl,
+            onChanged: (_) => _filterSales(),
+            style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: 'Rechercher client, numéro...',
+              hintStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  color: Color(0xFFA0AEC0),
+                  fontSize: 12.5),
+              prefixIcon: const Icon(Icons.search_rounded,
+                  color: Color(0xFF6B7280), size: 18),
+              suffixIcon: _searchCtrl.text.isNotEmpty
+                  ? IconButton(
+                splashRadius: 14,
+                icon: const Icon(Icons.clear_rounded,
+                    size: 15, color: Color(0xFF6B7280)),
+                onPressed: () {
+                  _searchCtrl.clear();
+                  _filterSales();
+                },
+              )
+                  : null,
+              filled: true,
+              fillColor: const Color(0xFFFFFFFF),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0x18000000))),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0x18000000))),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide:
+                  const BorderSide(color: Color(0xFF0067C0), width: 1.5)),
             ),
-            SizedBox(height: 2),
-            Text(
-              'Confirmez la réception des règlements au comptoir pour valider la vente',
-              style: TextStyle(
-                fontFamily: kAppFontFamily,
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-                color: Color(0xFF64748B),
-              ),
-            ),
-          ],
+          ),
         ),
-
-        const Spacer(),
-
+        const SizedBox(width: 12),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(filters.length, (index) {
+                final isSelected = _selectedFilter == filters[index];
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    label: Text(labels[index]),
+                    selected: isSelected,
+                    onSelected: (_) {
+                      setState(() {
+                        _selectedFilter = filters[index];
+                        _filterSales();
+                      });
+                    },
+                    selectedColor: const Color(0xFFE8F2FB),
+                    backgroundColor: const Color(0xFFFFFFFF),
+                    labelStyle: TextStyle(
+                      fontFamily: kAppFontFamily,
+                      color: isSelected
+                          ? const Color(0xFF0067C0)
+                          : const Color(0xFF475569),
+                      fontWeight:
+                      isSelected ? FontWeight.w700 : FontWeight.w500,
+                      fontSize: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(
+                          color: isSelected
+                              ? const Color(0xFF0067C0)
+                              : const Color(0x18000000)),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
         SizedBox(
           height: 38,
-          child: OutlinedButton.icon(
-            onPressed: _isLoading ? null : _loadPendingInvoices,
-            icon: const Icon(Icons.refresh_rounded, size: 16),
-            label: const Text('Actualiser'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF0F172A),
-              side: const BorderSide(color: Color(0x20000000)),
+          child: ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CashierNewSale()),
+              ).then((_) => _loadSales());
+            },
+            icon: const Icon(Icons.add_rounded, size: 17),
+            label: Text(isWide ? "Nouvelle Vente" : "Vendre"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0067C0),
+              foregroundColor: Colors.white,
+              elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
               textStyle: const TextStyle(
                 fontFamily: kAppFontFamily,
-                fontWeight: FontWeight.w600,
-                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                letterSpacing: 0.1,
               ),
             ),
           ),
@@ -420,7 +1173,7 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
   }
 
   // ---------------------------------------------------------------------------
-  // 3. TABLEAU DE DONNÉES DESKTOP
+  // 3. TABLEAU DESKTOP
   // ---------------------------------------------------------------------------
   Widget _buildDesktopDataTable() {
     return LayoutBuilder(
@@ -432,34 +1185,49 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
             child: ConstrainedBox(
               constraints: BoxConstraints(minWidth: constraints.maxWidth),
               child: DataTable(
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                headingRowColor:
+                WidgetStateProperty.all(const Color(0xFFF8FAFC)),
                 headingRowHeight: 42,
-                dataRowMinHeight: 48,
-                dataRowMaxHeight: 48,
+                dataRowMinHeight: 52,
+                dataRowMaxHeight: 52,
                 horizontalMargin: 20,
-                columnSpacing: 26,
+                columnSpacing: 24,
                 dividerThickness: 1,
                 columns: const [
                   DataColumn(label: Text("N° FACTURE", style: _headerStyle)),
-                  DataColumn(label: Text("DATE ÉMISSION", style: _headerStyle)),
+                  DataColumn(label: Text("DATE & HEURE", style: _headerStyle)),
                   DataColumn(label: Text("CLIENT", style: _headerStyle)),
-                  DataColumn(label: Text("MONTANT TTC", style: _headerStyle)),
+                  DataColumn(label: Text("TOTAL NET TTC", style: _headerStyle)),
                   DataColumn(label: Text("STATUT", style: _headerStyle)),
                   DataColumn(label: Text("ACTIONS", style: _headerStyle)),
                 ],
-                rows: _pendingInvoices.map((invoice) {
-                  final total = double.tryParse(invoice['total_ttc']?.toString() ?? '0') ?? 0;
-                  final client = invoice['client_nom'] as String? ?? 'Client de passage';
-                  final numero = invoice['numero_facture'] as String? ?? '—';
-                  final date = invoice['created_at'] as String? ?? '';
-                  final formattedDate = _formatDate(date);
+                rows: _filteredSales.map((sale) {
+                  final status = sale['statut'] as String? ?? 'en_cours';
+                  final total = _toDouble(sale['total_ttc']);
+                  final restant = _toDouble(sale['montant_restant']);
+                  final client = sale['client_nom'] as String?
+                      ?? sale['client_nom_libre'] as String?
+                      ?? 'Client de passage';
+                  final numero = sale['numero_facture'] as String? ?? '';
+                  final date = sale['created_at'] as String? ?? '';
+                  final canValidate = (status == 'en_cours') && restant > 0;
+
+                  String formattedDate = '';
+                  try {
+                    final dateTime = DateTime.parse(date);
+                    formattedDate =
+                    '${dateTime.day.toString().padLeft(2, '0')}/${dateTime.month.toString().padLeft(2, '0')}/${dateTime.year} à '
+                        '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+                  } catch (_) {
+                    formattedDate = date;
+                  }
 
                   return DataRow(
                     cells: [
-                      // N° Facture
                       DataCell(
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF1F5F9),
                             borderRadius: BorderRadius.circular(6),
@@ -476,8 +1244,6 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
                           ),
                         ),
                       ),
-
-                      // Date
                       DataCell(
                         Text(
                           formattedDate,
@@ -488,8 +1254,6 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
                           ),
                         ),
                       ),
-
-                      // Client
                       DataCell(
                         Text(
                           client,
@@ -501,104 +1265,67 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
                           ),
                         ),
                       ),
-
-                      // Montant TTC
                       DataCell(
-                        Text(
-                          '${total.toStringAsFixed(2)} \$',
-                          style: const TextStyle(
-                            fontFamily: kAppFontFamily,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF0067C0),
-                            fontSize: 13.5,
-                          ),
-                        ),
-                      ),
-
-                      // Statut
-                      DataCell(
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFEF3C7),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.schedule_rounded, size: 12, color: Color(0xFFB45309)),
-                              SizedBox(width: 4),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '${total.toStringAsFixed(2)} \$',
+                              style: const TextStyle(
+                                fontFamily: kAppFontFamily,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0067C0),
+                                fontSize: 13.5,
+                              ),
+                            ),
+                            if (restant > 0)
                               Text(
-                                'EN COURS',
-                                style: TextStyle(
+                                'Reste: ${restant.toStringAsFixed(2)} \$',
+                                style: const TextStyle(
                                   fontFamily: kAppFontFamily,
-                                  color: Color(0xFFB45309),
                                   fontSize: 10.5,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.3,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFFB45309),
                                 ),
                               ),
-                            ],
-                          ),
+                          ],
                         ),
                       ),
-
-                      // Actions
+                      DataCell(_buildStatusBadge(status)),
                       DataCell(
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Bouton Voir
-                            OutlinedButton.icon(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const CashierSales(initialFilter: 'en_cours'),
+                            if (canValidate) ...[
+                              ElevatedButton(
+                                onPressed: _isActionLoading
+                                    ? null
+                                    : () => _validateInvoice(sale),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0067C0),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(6)),
+                                  textStyle: const TextStyle(
+                                    fontFamily: kAppFontFamily,
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
                                   ),
-                                );
-                              },
-                              icon: const Icon(Icons.visibility_outlined, size: 14),
-                              label: const Text('Voir'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF475569),
-                                side: const BorderSide(color: Color(0x20000000)),
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                textStyle: const TextStyle(
-                                  fontFamily: kAppFontFamily,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
                                 ),
+                                child: const Text('Encaisser'),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-
-                            // Bouton Encaisser
-                            ElevatedButton.icon(
-                              onPressed: _isActionLoading
-                                  ? null
-                                  : () async => await _validateInvoiceWithModePicker(invoice),
-                              icon: _isActionLoading
-                                  ? const SizedBox(
-                                width: 13,
-                                height: 13,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                                  : const Icon(Icons.check_rounded, size: 15),
-                              label: Text(_isActionLoading ? '...' : 'Encaisser'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF0067C0),
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                textStyle: const TextStyle(
-                                  fontFamily: kAppFontFamily,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
+                              const SizedBox(width: 8),
+                            ],
+                            IconButton(
+                              icon: const Icon(Icons.print_outlined,
+                                  size: 17, color: Color(0xFF0067C0)),
+                              splashRadius: 14,
+                              tooltip: 'Réimprimer le reçu client',
+                              onPressed: () => _reprintReceipt(sale),
                             ),
                           ],
                         ),
@@ -623,20 +1350,22 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
   );
 
   // ---------------------------------------------------------------------------
-  // 4. LIGNES MOBILE
+  // 4. LISTE MOBILE
   // ---------------------------------------------------------------------------
-  Widget _buildMobileDataRows() {
+  Widget _buildMobileList() {
     return ListView.separated(
       padding: const EdgeInsets.all(12),
-      itemCount: _pendingInvoices.length,
-      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0x12000000)),
+      itemCount: _filteredSales.length,
+      separatorBuilder: (_, __) =>
+      const Divider(height: 1, color: Color(0x12000000)),
       itemBuilder: (context, index) {
-        final invoice = _pendingInvoices[index];
-        final total = double.tryParse(invoice['total_ttc']?.toString() ?? '0') ?? 0;
-        final client = invoice['client_nom'] as String? ?? 'Client';
-        final numero = invoice['numero_facture'] as String? ?? '';
-        final date = invoice['created_at'] as String? ?? '';
-        final formattedDate = _formatDate(date);
+        final sale = _filteredSales[index];
+        final status = sale['statut'] as String? ?? 'en_cours';
+        final total = _toDouble(sale['total_ttc']);
+        final restant = _toDouble(sale['montant_restant']);
+        final client = sale['client_nom'] as String? ?? 'Client';
+        final numero = sale['numero_facture'] as String? ?? '';
+        final canValidate = (status == 'en_cours') && restant > 0;
 
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
@@ -649,75 +1378,87 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
                   Text(
                     numero,
                     style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                      color: Color(0xFF0067C0),
-                    ),
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        color: Color(0xFF0067C0)),
                   ),
-                  Text(
-                    '${total.toStringAsFixed(2)} \$',
-                    style: const TextStyle(
-                      fontFamily: kAppFontFamily,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: Color(0xFF0067C0),
-                    ),
-                  ),
+                  _buildStatusBadge(status),
                 ],
               ),
               const SizedBox(height: 4),
-              Text(
-                client,
-                style: const TextStyle(
-                  fontFamily: kAppFontFamily,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13.5,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              Text(
-                formattedDate,
-                style: const TextStyle(
-                  fontFamily: kAppFontFamily,
-                  fontSize: 11.5,
-                  color: Color(0xFF64748B),
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    client,
+                    style: const TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.5,
+                        color: Color(0xFF0F172A)),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${total.toStringAsFixed(2)} \$',
+                        style: const TextStyle(
+                            fontFamily: kAppFontFamily,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: Color(0xFF0067C0)),
+                      ),
+                      if (restant > 0)
+                        Text(
+                          'Reste: ${restant.toStringAsFixed(2)} \$',
+                          style: const TextStyle(
+                              fontFamily: kAppFontFamily,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFB45309)),
+                        ),
+                    ],
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  OutlinedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const CashierSales(initialFilter: 'en_cours'),
-                        ),
-                      );
-                    },
+                  if (canValidate) ...[
+                    ElevatedButton(
+                      onPressed:
+                      _isActionLoading ? null : () => _validateInvoice(sale),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0067C0),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6)),
+                      ),
+                      child: const Text('Encaisser',
+                          style: TextStyle(
+                              fontFamily: kAppFontFamily,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  OutlinedButton.icon(
+                    onPressed: () => _reprintReceipt(sale),
+                    icon: const Icon(Icons.print_outlined, size: 15),
+                    label: const Text('Reçu'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF475569),
                       side: const BorderSide(color: Color(0x20000000)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6)),
                     ),
-                    child: const Text('Détails'),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _isActionLoading
-                        ? null
-                        : () async => await _validateInvoiceWithModePicker(invoice),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0067C0),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                    ),
-                    child: const Text('Encaisser'),
                   ),
                 ],
               ),
@@ -729,187 +1470,51 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
   }
 
   // ---------------------------------------------------------------------------
-  // DIALOGUE D'ENCAISSEMENT (Design Windows 11)
+  // BADGE STATUT
   // ---------------------------------------------------------------------------
-  Future<void> _validateInvoiceWithModePicker(Map<String, dynamic> invoice) async {
-    final total = double.tryParse(invoice['total_ttc']?.toString() ?? '0') ?? 0;
-    final client = invoice['client_nom'] as String? ?? 'Client';
-    final numero = invoice['numero_facture'] as String? ?? '';
+  Widget _buildStatusBadge(String status) {
+    Color color;
+    Color bgColor;
+    String label;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: const Color(0xFFFFFFFF),
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 12),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8F2FB),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Icon(Icons.payments_outlined, color: Color(0xFF0067C0), size: 20),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'Encaisser en espèces',
-              style: TextStyle(
-                fontFamily: kAppFontFamily,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1F1F1F),
-              ),
-            ),
-          ],
+    switch (status) {
+      case 'payee':
+        color = const Color(0xFF107C41);
+        bgColor = const Color(0xFFE6F4EA);
+        label = 'Payée';
+        break;
+      case 'livree':
+        color = const Color(0xFF0067C0);
+        bgColor = const Color(0xFFE8F2FB);
+        label = 'Livrée';
+        break;
+      case 'annulee':
+        color = const Color(0xFFC42B1C);
+        bgColor = const Color(0xFFFDE8E8);
+        label = 'Annulée';
+        break;
+      default:
+        color = const Color(0xFFB45309);
+        bgColor = const Color(0xFFFEF3C7);
+        label = 'En cours';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontFamily: kAppFontFamily,
+          color: color,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Confirmez la réception du règlement au comptoir pour finaliser la facture $numero.',
-              style: const TextStyle(
-                fontFamily: kAppFontFamily,
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-                color: Color(0xFF5F6368),
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0x14000000)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildDialogInfoRow('Client', client),
-                  const SizedBox(height: 6),
-                  _buildDialogInfoRow('Montant net', '${total.toStringAsFixed(2)} \$'),
-                  const SizedBox(height: 6),
-                  _buildDialogInfoRow('Mode de règlement', 'CASH (USD)'),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF4A4A4A),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-            ),
-            child: const Text(
-              'Annuler',
-              style: TextStyle(
-                fontFamily: kAppFontFamily,
-                fontWeight: FontWeight.w500,
-                fontSize: 13,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0067C0),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-            ),
-            child: const Text(
-              'Valider le paiement',
-              style: TextStyle(
-                fontFamily: kAppFontFamily,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ],
       ),
     );
-
-    if (confirmed == true) {
-      await _validateInvoiceWithMode(invoice);
-    }
-  }
-
-  Widget _buildDialogInfoRow(String label, String value) {
-    return Row(
-      children: [
-        Text(
-          '$label : ',
-          style: const TextStyle(
-            fontFamily: kAppFontFamily,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF64748B),
-            fontSize: 12.5,
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(
-              fontFamily: kAppFontFamily,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF0F172A),
-              fontSize: 13,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _validateInvoiceWithMode(Map<String, dynamic> invoice) async {
-    setState(() => _isActionLoading = true);
-    try {
-      final user = Provider.of<AuthProvider>(context, listen: false).user;
-      if (user == null) {
-        _showSnackBar('Utilisateur non connecté', const Color(0xFFC42B1C));
-        return;
-      }
-
-      final service = AdminService(user.token);
-      final result = await service.validateInvoiceWithMode(
-        invoice['id'] as int,
-        modePaiement: 'cash',
-      );
-
-      if (result['success'] == true) {
-        _showSnackBar('Facture encaissée avec succès', const Color(0xFF107C41));
-        _loadPendingInvoices();
-      } else {
-        _showSnackBar(result['message'] ?? 'Erreur de validation', const Color(0xFFC42B1C));
-      }
-    } catch (e) {
-      _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
-    } finally {
-      if (mounted) setState(() => _isActionLoading = false);
-    }
-  }
-
-  String _formatDate(String date) {
-    try {
-      final dt = DateTime.parse(date);
-      return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
-    } catch (_) {
-      return date.isNotEmpty && date.length >= 10 ? date.substring(0, 10) : date;
-    }
   }
 
   // ---------------------------------------------------------------------------
@@ -925,15 +1530,16 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: const BoxDecoration(
-                color: Color(0xFFF1F5F9),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.check_circle_outline_rounded, size: 32, color: Color(0xFF107C41)),
+                  color: Color(0xFFF1F5F9), shape: BoxShape.circle),
+              child: const Icon(Icons.shopping_cart_outlined,
+                  size: 32, color: Color(0xFF94A3B8)),
             ),
             const SizedBox(height: 14),
-            const Text(
-              'Toutes les factures sont encaissées !',
-              style: TextStyle(
+            Text(
+              _searchCtrl.text.isEmpty
+                  ? 'Aucune vente enregistrée'
+                  : 'Aucune transaction trouvée',
+              style: const TextStyle(
                 fontFamily: kAppFontFamily,
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
@@ -941,31 +1547,37 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
               ),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'Aucun règlement en attente de validation pour le moment.',
-              style: TextStyle(
+            Text(
+              _searchCtrl.text.isEmpty
+                  ? 'Cliquez sur "Nouvelle Vente" pour générer votre premier ticket.'
+                  : 'Modifiez vos critères ou votre terme de recherche.',
+              style: const TextStyle(
                 fontFamily: kAppFontFamily,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w400,
                 color: Color(0xFF64748B),
               ),
             ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: _loadPendingInvoices,
-              icon: const Icon(Icons.refresh_rounded, size: 16),
-              label: const Text('Actualiser le statut'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF0067C0),
-                side: const BorderSide(color: Color(0xFF0067C0)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                textStyle: const TextStyle(
-                  fontFamily: kAppFontFamily,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+            if (_searchCtrl.text.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              OutlinedButton(
+                onPressed: () {
+                  _searchCtrl.clear();
+                  _filterSales();
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF0067C0),
+                  side: const BorderSide(color: Color(0xFF0067C0)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
                 ),
+                child: const Text('Effacer la recherche',
+                    style: TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12)),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -974,12 +1586,12 @@ class _InvoiceValidationViewState extends State<InvoiceValidationView> {
 }
 
 // ---------------------------------------------------------------------------
-// PAINTER VECTORIEL : ONDES FLUIDES DES CARTES DE VALIDATION FACTURES
+// PAINTER VECTORIEL : ONDES FLUIDES
 // ---------------------------------------------------------------------------
-class InvoiceMetricWavePainter extends CustomPainter {
+class SalesMetricWavePainter extends CustomPainter {
   final double waveSeed;
 
-  InvoiceMetricWavePainter({required this.waveSeed});
+  SalesMetricWavePainter({required this.waveSeed});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1031,6 +1643,6 @@ class InvoiceMetricWavePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant InvoiceMetricWavePainter oldDelegate) =>
+  bool shouldRepaint(covariant SalesMetricWavePainter oldDelegate) =>
       oldDelegate.waveSeed != waveSeed;
 }

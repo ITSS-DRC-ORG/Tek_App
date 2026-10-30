@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:tek_app/screens/admin/view/bons_caisse_view.dart';
+import 'package:tek_app/screens/admin/view/credits_view.dart';
 import 'package:tek_app/screens/admin/view/finance_view.dart';
 import 'package:tek_app/screens/admin/view/product_view.dart';
 import 'package:tek_app/screens/admin/view/settings_view.dart';
 import 'package:tek_app/screens/admin/view/stock_to_recover_view.dart';
 import 'package:tek_app/screens/admin/view/user_view.dart';
 import 'package:tek_app/screens/admin/view/depot_view.dart';
-import 'package:tek_app/screens/admin/view/invoice_validation_view.dart';
 import 'package:tek_app/screens/stock/stock_supply.dart';
 import 'package:tek_app/screens/stock/stock_transfers.dart';
+import 'package:tek_app/screens/cashier/cashier_sales.dart';
 import 'package:tek_app/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../api/admin_service.dart';
@@ -34,7 +36,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ---------------------------------------------------------------------------
-  // DIALOGUE DE CONFIRMATION DE DÉCONNEXION (WINDOWS 11 FLUENT 2)
+  // DIALOGUE DE CONFIRMATION DE DÉCONNEXION
   // ---------------------------------------------------------------------------
   Future<void> _confirmLogout(BuildContext context) async {
     final ok = await showDialog<bool>(
@@ -55,7 +57,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 color: const Color(0xFFFEE2E2),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.logout_rounded, color: Color(0xFFC42B1C), size: 20),
+              child: const Icon(Icons.logout_rounded,
+                  color: Color(0xFFC42B1C), size: 20),
             ),
             const SizedBox(width: 12),
             const Text(
@@ -84,11 +87,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
             onPressed: () => Navigator.pop(dialogCtx, false),
             style: TextButton.styleFrom(
               foregroundColor: const Color(0xFF475569),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6)),
             ),
             child: const Text(
               'Annuler',
-              style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w500, fontSize: 13),
+              style: TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13),
             ),
           ),
           ElevatedButton(
@@ -98,7 +105,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             child: const Text(
               'Se déconnecter',
@@ -114,19 +122,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
 
     if (ok == true && mounted) {
-      // 1. Redirection propre vers la page de connexion
-      Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil('/', (route) => false);
-      // 2. Déconnexion de l'état
+      Navigator.of(context, rootNavigator: true)
+          .pushNamedAndRemoveUntil('/', (route) => false);
       Provider.of<AuthProvider>(context, listen: false).logout();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Récupération sécurisée sans opérateur d'assertion "!"
     final user = Provider.of<AuthProvider>(context).user;
 
-    // ✅ Si l'utilisateur est déconnecté, on évite le crash en affichant un écran neutre
     if (user == null) {
       return const Scaffold(
         backgroundColor: Color(0xFFF1F3F7),
@@ -139,7 +144,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
       );
     }
 
-    // Mise à jour du service si le token a changé
     if (_adminService == null || _adminService!.token != user.token) {
       _adminService = AdminService(user.token);
     }
@@ -177,26 +181,30 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // ---------------------------------------------------------------------------
   Widget _buildContent() {
     if (_adminService == null) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF0067C0)));
+      return const Center(
+          child: CircularProgressIndicator(color: Color(0xFF0067C0)));
     }
 
     final List<Widget> views = [
       ProductView(service: _adminService!),
       UserView(service: _adminService!),
       DepotView(service: _adminService!),
-      const InvoiceValidationView(),
+      const CashierSales(),
       const StockToRecoverView(),
       const StockTransfers(),
       const StockSupply(),
       const FinanceView(),
+      const CreditsView(),
+      const BonsCaisseView(),
       const SettingsView(),
     ];
 
-    return views[_selectedIndex];
+    final idx = _selectedIndex.clamp(0, views.length - 1);
+    return views[idx];
   }
 
   // ---------------------------------------------------------------------------
-  // SIDEBAR DESKTOP (Design Fluent 2 Windows 11)
+  // SIDEBAR DESKTOP
   // ---------------------------------------------------------------------------
   Widget _buildSidebar(dynamic user) {
     return Container(
@@ -211,7 +219,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // En-tête Marque
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
               child: Row(
@@ -266,7 +273,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
             ),
 
-            // Séparateur de section
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Text(
@@ -281,30 +287,41 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
             ),
 
-            // Navigation des modules
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 children: [
-                  _sidebarItem(Icons.inventory_2_outlined, "Produits & Articles", 0),
-                  _sidebarItem(Icons.people_outline_rounded, "Équipe & Rôles", 1),
-                  _sidebarItem(Icons.warehouse_outlined, "Entrepôts & Dépôts", 2),
-                  _sidebarItem(Icons.receipt_long_outlined, "Validation Factures", 3),
-                  _sidebarItem(Icons.pending_actions_rounded, "Stocks à Récupérer", 4),
-                  _sidebarItem(Icons.swap_horiz_rounded, "Transferts de Stock", 5),
-
-                  _sidebarItem(Icons.local_shipping_outlined, "Ravitaillement", 6),
+                  _sidebarItem(Icons.inventory_2_outlined,
+                      "Produits & Articles", 0),
+                  _sidebarItem(Icons.people_outline_rounded,
+                      "Équipe & Rôles", 1),
+                  _sidebarItem(Icons.warehouse_outlined,
+                      "Entrepôts & Dépôts", 2),
+                  _sidebarItem(Icons.receipt_long_outlined,
+                      "Validation Factures", 3),
+                  _sidebarItem(Icons.pending_actions_rounded,
+                      "Stocks à Récupérer", 4),
+                  _sidebarItem(Icons.swap_horiz_rounded,
+                      "Transferts de Stock", 5),
+                  _sidebarItem(Icons.local_shipping_outlined,
+                      "Ravitaillement", 6),
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Divider(height: 1, thickness: 1, color: Color(0x10000000)),
+                    child: Divider(
+                        height: 1, thickness: 1, color: Color(0x10000000)),
                   ),
-                  _sidebarItem(Icons.account_balance_wallet_outlined, "Finance & Caisse", 7),
-                  _sidebarItem(Icons.settings_outlined, "Paramètres Généraux", 8),
+                  _sidebarItem(Icons.account_balance_wallet_outlined,
+                      "Finance & Caisse", 7),
+                  _sidebarItem(Icons.receipt_long_outlined,
+                      "Crédits Clients", 8),
+                  _sidebarItem(Icons.assignment_outlined,
+                      "Bons de Caisse", 9),
+                  _sidebarItem(Icons.settings_outlined,
+                      "Paramètres Généraux", 10),
                 ],
               ),
             ),
 
-            // Profil Utilisateur en pied de Sidebar
             _buildSidebarUserCard(user),
           ],
         ),
@@ -336,7 +353,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   width: 3.5,
                   height: 18,
                   decoration: BoxDecoration(
-                    color: selected ? const Color(0xFF0067C0) : Colors.transparent,
+                    color:
+                    selected ? const Color(0xFF0067C0) : Colors.transparent,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -344,7 +362,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Icon(
                   icon,
                   size: 18,
-                  color: selected ? const Color(0xFF0067C0) : const Color(0xFF64748B),
+                  color: selected
+                      ? const Color(0xFF0067C0)
+                      : const Color(0xFF64748B),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -352,8 +372,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     label,
                     style: TextStyle(
                       fontFamily: kAppFontFamily,
-                      color: selected ? const Color(0xFF0067C0) : const Color(0xFF1E293B),
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected
+                          ? const Color(0xFF0067C0)
+                          : const Color(0xFF1E293B),
+                      fontWeight:
+                      selected ? FontWeight.w700 : FontWeight.w500,
                       fontSize: 13,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -367,7 +390,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // Carte Utilisateur en bas de Sidebar
   Widget _buildSidebarUserCard(dynamic user) {
     final initials = _getUserInitials(user);
     final name = _getUserName(user);
@@ -439,7 +461,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ---------------------------------------------------------------------------
-  // TOP BAR DESKTOP (Style Fluent sobre & Fil d'Ariane)
+  // TOP BAR DESKTOP
   // ---------------------------------------------------------------------------
   Widget _buildTopBar() {
     final titles = [
@@ -451,6 +473,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
       'Transferts Inter-Dépôts',
       'Ravitaillement de Stock',
       'Finance & Caisse',
+      'Crédits Clients',
+      'Bons de Caisse',
       'Paramètres Généraux',
     ];
 
@@ -484,7 +508,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
               Text(
-                titles[_selectedIndex],
+                titles[_selectedIndex.clamp(0, titles.length - 1)],
                 style: const TextStyle(
                   fontFamily: kAppFontFamily,
                   fontSize: 15,
@@ -563,7 +587,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
       'Transferts',
       'Ravitaillement',
       'Finance',
-      'Paramètres'
+      'Crédits Clients',
+      'Bons de Caisse',
+      'Paramètres',
     ];
 
     return Scaffold(
@@ -579,7 +605,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         ),
         title: Text(
-          titles[_selectedIndex],
+          titles[_selectedIndex.clamp(0, titles.length - 1)],
           style: const TextStyle(
             fontFamily: kAppFontFamily,
             color: Color(0xFF0F172A),
@@ -643,12 +669,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
             _mobileDrawerItem(Icons.inventory_2_outlined, 'Produits', 0),
             _mobileDrawerItem(Icons.people_outline_rounded, 'Utilisateurs', 1),
             _mobileDrawerItem(Icons.warehouse_outlined, 'Dépôts', 2),
-            _mobileDrawerItem(Icons.receipt_long_outlined, 'Validation Factures', 3),
-            _mobileDrawerItem(Icons.pending_actions_rounded, 'Stocks à Récupérer', 4),
+            _mobileDrawerItem(
+                Icons.receipt_long_outlined, 'Validation Factures', 3),
+            _mobileDrawerItem(Icons.pending_actions_rounded,
+                'Stocks à Récupérer', 4),
             _mobileDrawerItem(Icons.swap_horiz_rounded, 'Transferts', 5),
-            _mobileDrawerItem(Icons.local_shipping_outlined, 'Ravitaillement', 6),
-            _mobileDrawerItem(Icons.account_balance_wallet_outlined, 'Finance', 7),
-            _mobileDrawerItem(Icons.settings_outlined, 'Paramètres', 8),
+            _mobileDrawerItem(
+                Icons.local_shipping_outlined, 'Ravitaillement', 6),
+            _mobileDrawerItem(
+                Icons.account_balance_wallet_outlined, 'Finance', 7),
+            _mobileDrawerItem(Icons.receipt_long_outlined, 'Crédits', 8),
+            _mobileDrawerItem(Icons.assignment_outlined, 'Bons de Caisse', 9),
+            _mobileDrawerItem(Icons.settings_outlined, 'Paramètres', 10),
             const Spacer(),
             _buildSidebarUserCard(user),
           ],
@@ -680,15 +712,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Icon(
                   icon,
                   size: 19,
-                  color: selected ? const Color(0xFF0067C0) : const Color(0xFF64748B),
+                  color: selected
+                      ? const Color(0xFF0067C0)
+                      : const Color(0xFF64748B),
                 ),
                 const SizedBox(width: 14),
                 Text(
                   label,
                   style: TextStyle(
                     fontFamily: kAppFontFamily,
-                    color: selected ? const Color(0xFF0067C0) : const Color(0xFF1E293B),
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected
+                        ? const Color(0xFF0067C0)
+                        : const Color(0xFF1E293B),
+                    fontWeight:
+                    selected ? FontWeight.w700 : FontWeight.w500,
                     fontSize: 13.5,
                   ),
                 ),

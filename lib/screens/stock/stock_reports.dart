@@ -133,7 +133,7 @@ class _StockReportsState extends State<StockReports>
   }
 
   // ---------------------------------------------------------------------------
-  // GÉNÉRATION DES RAPPORTS (Logique Intacte)
+  // GÉNÉRATION DES RAPPORTS
   // ---------------------------------------------------------------------------
   void _generateStockReport() async {
     setState(() {
@@ -156,7 +156,6 @@ class _StockReportsState extends State<StockReports>
           'total_unites': 0,
           'nb_produits': 0,
           'valeur_vente': 0.0,
-          'valeur_achat': 0.0,
           'en_alerte': 0,
           'produits': <Map<String, dynamic>>[],
         },
@@ -168,7 +167,6 @@ class _StockReportsState extends State<StockReports>
       entry['total_unites'] += stock.quantite;
       entry['nb_produits'] += 1;
       entry['valeur_vente'] += stock.quantite * (product?.prixVente ?? 0);
-      entry['valeur_achat'] += stock.quantite * (product?.prixAchat ?? 0);
 
       if (stock.quantite <= stock.quantiteMinimale) {
         entry['en_alerte'] += 1;
@@ -267,7 +265,6 @@ class _StockReportsState extends State<StockReports>
           'produit': _findProduct(s.produitId),
           'total': 0,
           'valeur_vente': 0.0,
-          'valeur_achat': 0.0,
         },
       );
 
@@ -275,8 +272,6 @@ class _StockReportsState extends State<StockReports>
       parProduit[s.produitId]!['total'] += s.quantite;
       parProduit[s.produitId]!['valeur_vente'] +=
           s.quantite * (product?.prixVente ?? 0);
-      parProduit[s.produitId]!['valeur_achat'] +=
-          s.quantite * (product?.prixAchat ?? 0);
     }
 
     final sorted = parProduit.values.toList()
@@ -290,8 +285,6 @@ class _StockReportsState extends State<StockReports>
 
     final totalValeurVente = parProduit.values.fold<double>(
         0, (s, v) => s + (v['valeur_vente'] as double));
-    final totalValeurAchat = parProduit.values.fold<double>(
-        0, (s, v) => s + (v['valeur_achat'] as double));
 
     setState(() {
       _reportData = {
@@ -299,8 +292,6 @@ class _StockReportsState extends State<StockReports>
         'top_par_quantite': topParQuantite,
         'nb_produits': parProduit.length,
         'valeur_vente': totalValeurVente,
-        'valeur_achat': totalValeurAchat,
-        'marge_potentielle': totalValeurVente - totalValeurAchat,
       };
       _isAnalyseLoading = false;
     });
@@ -331,9 +322,6 @@ class _StockReportsState extends State<StockReports>
 
   Map<String, dynamic> _preparePDFData() {
     switch (_selectedReport) {
-    // -------------------------------------------------------------------
-    // ÉTAT DES STOCKS — un tableau par dépôt
-    // -------------------------------------------------------------------
       case 'État des stocks':
         final stats = _reportData as Map<int, Map<String, dynamic>>;
         final sections = <Map<String, dynamic>>[];
@@ -342,7 +330,6 @@ class _StockReportsState extends State<StockReports>
           final depot = entry['depot'] as Depot;
           final produits = entry['produits'] as List;
 
-          // Synthèse (paires)
           sections.add({
             'title': depot.nom,
             'subtitle':
@@ -353,14 +340,9 @@ class _StockReportsState extends State<StockReports>
                 'label': 'Valeur vente',
                 'value': '\$${(entry['valeur_vente'] as double).toStringAsFixed(0)}'
               },
-              {
-                'label': 'Valeur achat',
-                'value': '\$${(entry['valeur_achat'] as double).toStringAsFixed(0)}'
-              },
             ],
           });
 
-          // Tableau détaillé (lignes / colonnes)
           final rows = <List<String>>[];
           for (final p in produits) {
             final stock = p['stock'] as Stock;
@@ -390,9 +372,6 @@ class _StockReportsState extends State<StockReports>
           'sections': sections,
         };
 
-    // -------------------------------------------------------------------
-    // MOUVEMENTS — un tableau par dépôt
-    // -------------------------------------------------------------------
       case 'Mouvements':
         final data = _reportData as Map<String, dynamic>;
         final parDepot = data['par_depot'] as Map<int, Map<String, dynamic>>;
@@ -432,9 +411,6 @@ class _StockReportsState extends State<StockReports>
           ],
         };
 
-    // -------------------------------------------------------------------
-    // ALERTES — un seul tableau listant tous les produits
-    // -------------------------------------------------------------------
       case 'Alertes':
         final alertes = _reportData as List<Stock>;
         final rows = <List<String>>[];
@@ -474,9 +450,6 @@ class _StockReportsState extends State<StockReports>
           ],
         };
 
-    // -------------------------------------------------------------------
-    // ANALYSE — synthèse + tableau top produits
-    // -------------------------------------------------------------------
       case 'Analyse':
         final data = _reportData as Map<String, dynamic>;
         final topParValeur = data['top_par_valeur'] as List;
@@ -504,16 +477,6 @@ class _StockReportsState extends State<StockReports>
                   'label': 'Valeur vente',
                   'value':
                   '\$${(data['valeur_vente'] as double).toStringAsFixed(0)}'
-                },
-                {
-                  'label': 'Valeur achat',
-                  'value':
-                  '\$${(data['valeur_achat'] as double).toStringAsFixed(0)}'
-                },
-                {
-                  'label': 'Marge potentielle',
-                  'value':
-                  '\$${(data['marge_potentielle'] as double).toStringAsFixed(0)}'
                 },
               ],
             },
@@ -649,7 +612,7 @@ class _StockReportsState extends State<StockReports>
   }
 
   // ---------------------------------------------------------------------------
-  // CARTES DE RAPPORTS AVEC ONDES FLUIDES (WINDOWS BLOOM)
+  // CARTES DE RAPPORTS
   // ---------------------------------------------------------------------------
   Widget _buildDesktopReportCards() {
     return Row(
@@ -697,7 +660,7 @@ class _StockReportsState extends State<StockReports>
           child: _buildReportCard(
             icon: Icons.pie_chart_outline_rounded,
             title: 'Analyse',
-            subtitle: 'Valeurs & marges',
+            subtitle: 'Valeurs du stock',
             badge: 'Financier',
             gradient: const [Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF2563EB)],
             waveSeed: 4.8,
@@ -761,7 +724,7 @@ class _StockReportsState extends State<StockReports>
             child: _buildReportCard(
               icon: Icons.pie_chart_outline_rounded,
               title: 'Analyse',
-              subtitle: 'Valeurs & marges',
+              subtitle: 'Valeurs du stock',
               badge: 'Financier',
               gradient: const [Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF2563EB)],
               waveSeed: 4.8,
@@ -809,7 +772,6 @@ class _StockReportsState extends State<StockReports>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Bannière fluide
             SizedBox(
               height: 58,
               child: Stack(
@@ -864,8 +826,6 @@ class _StockReportsState extends State<StockReports>
                 ],
               ),
             ),
-
-            // Pied de carte
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
               child: Row(
@@ -1064,8 +1024,6 @@ class _StockReportsState extends State<StockReports>
                           _buildStatItem('Unités', '${entry['total_unites']}', const Color(0xFF0F172A)),
                           const SizedBox(width: 8),
                           _buildStatItem('Valeur Vente', '${(entry['valeur_vente'] as double).toStringAsFixed(0)} \$', const Color(0xFF0067C0)),
-                          const SizedBox(width: 8),
-                          _buildStatItem('Valeur Achat', '${(entry['valeur_achat'] as double).toStringAsFixed(0)} \$', const Color(0xFF64748B)),
                         ],
                       ),
                       const SizedBox(height: 10),
@@ -1330,10 +1288,6 @@ class _StockReportsState extends State<StockReports>
                     Text(
                       '${(data['valeur_vente'] as double).toStringAsFixed(0)} \$',
                       style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
-                    ),
-                    Text(
-                      'Coût d\'achat : ${(data['valeur_achat'] as double).toStringAsFixed(0)} \$ • Marge brute prévisionnelle : ${(data['marge_potentielle'] as double).toStringAsFixed(0)} \$',
-                      style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, color: Color(0xFF107C41), fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),

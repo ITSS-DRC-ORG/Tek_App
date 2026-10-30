@@ -9,6 +9,14 @@ import 'package:tek_app/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../api/admin_service.dart';
 
+// Helper global : parse une valeur (String, num, null) en double
+double _toDouble(dynamic v) {
+  if (v == null) return 0.0;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? 0.0;
+  return 0.0;
+}
+
 class CashierSales extends StatefulWidget {
   final String? initialFilter;
   const CashierSales({super.key, this.initialFilter});
@@ -32,6 +40,13 @@ class _CashierSalesState extends State<CashierSales> {
       _selectedFilter = _normalizeFilter(widget.initialFilter!);
     }
     _loadSales();
+  }
+
+  bool get _canEncaisser {
+    final user = Provider.of<AuthProvider>(context, listen: false).user;
+    return user?.role == UserRole.vendeur ||
+        user?.role == UserRole.caissier ||
+        user?.role == UserRole.admin;
   }
 
   String _normalizeFilter(String input) {
@@ -91,12 +106,16 @@ class _CashierSalesState extends State<CashierSales> {
     final query = _searchCtrl.text.toLowerCase();
     setState(() {
       _filteredSales = _sales.where((sale) {
-        final client = (sale['client_nom'] as String? ?? '').toLowerCase();
+        final client = (sale['client_nom'] as String? ??
+            sale['client_nom_libre'] as String? ??
+            '')
+            .toLowerCase();
         final numero = (sale['numero_facture'] as String? ?? '').toLowerCase();
         final matchesSearch = client.contains(query) || numero.contains(query);
 
         final statut = sale['statut'] as String? ?? 'en_cours';
-        final matchesFilter = _selectedFilter == 'Toutes' || statut == _selectedFilter;
+        final matchesFilter =
+            _selectedFilter == 'Toutes' || statut == _selectedFilter;
 
         return matchesSearch && matchesFilter;
       }).toList();
@@ -140,107 +159,227 @@ class _CashierSalesState extends State<CashierSales> {
   // VALIDATION D'ENCAISSEMENT
   // ---------------------------------------------------------------------------
   Future<void> _validateInvoice(Map<String, dynamic> sale) async {
-    final total = double.tryParse(sale['total_ttc']?.toString() ?? '0') ?? 0;
-    final client = sale['client_nom'] ?? 'Client de passage';
+    final total = _toDouble(sale['total_ttc']);
+    final paye = _toDouble(sale['montant_paye']);
+    final restant = _toDouble(sale['montant_restant']);
+    final client =
+        sale['client_nom'] ?? sale['client_nom_libre'] ?? 'Client de passage';
     final numero = sale['numero_facture'] ?? '';
+
+    final montantCtrl = TextEditingController(text: restant.toStringAsFixed(2));
 
     final confirm = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: const Color(0xFFFFFFFF),
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        titlePadding: const EdgeInsets.fromLTRB(22, 20, 22, 12),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 22),
-        actionsPadding: const EdgeInsets.fromLTRB(22, 12, 22, 18),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8F2FB),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Icon(Icons.payments_outlined, color: Color(0xFF0067C0), size: 20),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final montantSaisi = double.tryParse(montantCtrl.text) ?? 0;
+          final nouveauRestant =
+          (restant - montantSaisi).clamp(0, double.infinity);
+          final valide = montantSaisi > 0 && montantSaisi <= restant;
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFFFFFFFF),
+            surfaceTintColor: Colors.transparent,
+            shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            titlePadding: const EdgeInsets.fromLTRB(22, 20, 22, 12),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 22),
+            actionsPadding: const EdgeInsets.fromLTRB(22, 12, 22, 18),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F2FB),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(Icons.payments_outlined,
+                      color: Color(0xFF0067C0), size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Encaisser la facture',
+                  style: TextStyle(
+                    fontFamily: kAppFontFamily,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            const Text(
-              'Encaisser la facture',
-              style: TextStyle(
-                fontFamily: kAppFontFamily,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF0F172A),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Confirmez-vous la perception du règlement en espèces pour le ticket $numero ?',
-              style: const TextStyle(
-                fontFamily: kAppFontFamily,
-                fontSize: 13,
-                color: Color(0xFF475569),
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0x14000000)),
-              ),
+            content: SizedBox(
+              width: 420,
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildDialogInfoRow('Client', client),
-                  const SizedBox(height: 4),
-                  _buildDialogInfoRow('Montant net', '${total.toStringAsFixed(2)} \$'),
-                  const SizedBox(height: 4),
-                  _buildDialogInfoRow('Mode de paiement', 'CASH (USD)'),
+                  Text(
+                    'Facture $numero — $client',
+                    style: const TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontSize: 12.5,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0x14000000)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildDialogInfoRow(
+                            'Total facture', '${total.toStringAsFixed(2)} \$'),
+                        const SizedBox(height: 4),
+                        _buildDialogInfoRow(
+                            'Déjà payé', '${paye.toStringAsFixed(2)} \$'),
+                        const SizedBox(height: 4),
+                        _buildDialogInfoRow(
+                          'Reste dû',
+                          '${restant.toStringAsFixed(2)} \$',
+                          highlight: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: montantCtrl,
+                    keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) => setDialogState(() {}),
+                    style: const TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Montant à encaisser (\$) *',
+                      labelStyle: const TextStyle(
+                          fontFamily: kAppFontFamily, fontSize: 12.5),
+                      prefixIcon:
+                      const Icon(Icons.attach_money_rounded, size: 18),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide:
+                        const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide:
+                        const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF0067C0), width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: () {
+                          montantCtrl.text = restant.toStringAsFixed(2);
+                          setDialogState(() {});
+                        },
+                        icon: const Icon(Icons.done_all_rounded, size: 14),
+                        label: const Text(
+                          'Solder tout',
+                          style: TextStyle(
+                              fontFamily: kAppFontFamily, fontSize: 11.5),
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF0067C0),
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                        ),
+                      ),
+                      const Spacer(),
+                      if (montantSaisi > 0)
+                        Text(
+                          'Nouveau reste : \$${nouveauRestant.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontFamily: kAppFontFamily,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: nouveauRestant > 0
+                                ? const Color(0xFFB45309)
+                                : const Color(0xFF107C41),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (!valide && montantSaisi > 0)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Le montant doit être compris entre 0 et le reste dû.',
+                        style: TextStyle(
+                          fontFamily: kAppFontFamily,
+                          fontSize: 11,
+                          color: Color(0xFFC42B1C),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text(
-              'Annuler',
-              style: TextStyle(
-                fontFamily: kAppFontFamily,
-                color: Color(0xFF64748B),
-                fontWeight: FontWeight.w500,
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text(
+                  'Annuler',
+                  style: TextStyle(
+                    fontFamily: kAppFontFamily,
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0067C0),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text(
-              'Encaisser le ticket',
-              style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
+              ElevatedButton(
+                onPressed:
+                valide ? () => Navigator.pop(dialogContext, true) : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0067C0),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text(
+                  valide
+                      ? 'Encaisser ${montantSaisi.toStringAsFixed(2)} \$'
+                      : 'Encaisser',
+                  style: const TextStyle(
+                      fontFamily: kAppFontFamily, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
 
     if (confirm != true) return;
+
+    final montant = double.tryParse(montantCtrl.text) ?? 0;
+    if (montant <= 0 || montant > restant) {
+      _showSnackBar('Montant invalide', const Color(0xFFD97706));
+      return;
+    }
 
     setState(() => _isActionLoading = true);
 
@@ -255,13 +394,20 @@ class _CashierSalesState extends State<CashierSales> {
       final result = await service.validateInvoiceWithMode(
         sale['id'] as int,
         modePaiement: 'cash',
+        montant: montant,
       );
 
       if (result['success'] == true) {
-        _showSnackBar('Facture encaissée avec succès', const Color(0xFF107C41));
+        _showSnackBar(
+          'Encaissement de ${montant.toStringAsFixed(2)} \$ enregistré',
+          const Color(0xFF107C41),
+        );
         _loadSales();
       } else {
-        _showSnackBar('Erreur: ${result['message'] ?? 'Impossible d\'encaisser'}', const Color(0xFFC42B1C));
+        _showSnackBar(
+          'Erreur: ${result['message'] ?? 'Impossible d\'encaisser'}',
+          const Color(0xFFC42B1C),
+        );
       }
     } catch (e) {
       _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
@@ -270,25 +416,28 @@ class _CashierSalesState extends State<CashierSales> {
     }
   }
 
-  Widget _buildDialogInfoRow(String label, String value) {
+  Widget _buildDialogInfoRow(String label, String value,
+      {bool highlight = false}) {
     return Row(
       children: [
         Text(
           '$label : ',
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: kAppFontFamily,
             fontWeight: FontWeight.w500,
-            color: Color(0xFF64748B),
+            color:
+            highlight ? const Color(0xFFB45309) : const Color(0xFF64748B),
             fontSize: 12.5,
           ),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: kAppFontFamily,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF0F172A),
+              color:
+              highlight ? const Color(0xFFB45309) : const Color(0xFF0F172A),
               fontSize: 13,
             ),
             maxLines: 1,
@@ -305,14 +454,18 @@ class _CashierSalesState extends State<CashierSales> {
   Future<void> _reprintReceipt(Map<String, dynamic> sale) async {
     try {
       final numeroFacture = sale['numero_facture'] as String? ?? '';
-      final clientName = sale['client_nom'] as String? ?? 'Client';
+      final clientName = sale['client_nom'] ??
+          sale['client_nom_libre'] as String? ??
+          'Client';
       final depotName = sale['depot_source_nom'] as String? ?? 'Dépôt';
       final lignes = sale['lignes'] as List? ?? [];
 
       double subtotal = 0;
       final printLines = lignes.map((line) {
-        final qte = line['quantite'] as int? ?? 0;
-        final prix = (line['prix_unitaire'] as num?)?.toDouble() ?? 0.0;
+        final qte = (line['quantite'] is int)
+            ? line['quantite'] as int
+            : int.tryParse(line['quantite']?.toString() ?? '0') ?? 0;
+        final prix = _toDouble(line['prix_unitaire']);
         subtotal += qte * prix;
         return {
           'produit_nom': line['produit_nom'] ?? 'Produit',
@@ -321,13 +474,17 @@ class _CashierSalesState extends State<CashierSales> {
         };
       }).toList();
 
-      final remise = double.tryParse(sale['remise']?.toString() ?? '0') ?? 0;
-      final total = double.tryParse(sale['total_ttc']?.toString() ?? '0') ?? 0;
+      final remise = _toDouble(sale['remise']);
+      final total = _toDouble(sale['total_ttc']);
+      final montantPaye = _toDouble(sale['montant_paye']);
+      final montantRestant = _toDouble(sale['montant_restant']);
 
       _showReprintDialog(
         saleData: {
           'numero_facture': numeroFacture,
           'mode_livraison': sale['mode_livraison'] ?? 'retrait_magasin',
+          'montant_paye': montantPaye,
+          'reste_a_payer': montantRestant,
         },
         lignes: printLines,
         clientName: clientName,
@@ -336,6 +493,8 @@ class _CashierSalesState extends State<CashierSales> {
         remise: remise,
         total: total,
         numeroFacture: numeroFacture,
+        montantPaye: montantPaye,
+        montantRestant: montantRestant,
       );
     } catch (e) {
       _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
@@ -351,6 +510,8 @@ class _CashierSalesState extends State<CashierSales> {
     required double remise,
     required double total,
     required String numeroFacture,
+    required double montantPaye,
+    required double montantRestant,
   }) {
     showDialog(
       context: context,
@@ -370,7 +531,8 @@ class _CashierSalesState extends State<CashierSales> {
                 color: const Color(0xFFE8F2FB),
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: const Icon(Icons.print_outlined, color: Color(0xFF0067C0), size: 20),
+              child: const Icon(Icons.print_outlined,
+                  color: Color(0xFF0067C0), size: 20),
             ),
             const SizedBox(width: 12),
             const Text(
@@ -411,6 +573,8 @@ class _CashierSalesState extends State<CashierSales> {
                 lignes: lignes,
                 total: total,
                 remise: remise,
+                montantPaye: montantPaye,
+                montantRestant: montantRestant,
               ),
             ),
           ],
@@ -418,7 +582,9 @@ class _CashierSalesState extends State<CashierSales> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Fermer', style: TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF64748B))),
+            child: const Text('Fermer',
+                style: TextStyle(
+                    fontFamily: kAppFontFamily, color: Color(0xFF64748B))),
           ),
           ElevatedButton.icon(
             onPressed: () async {
@@ -433,10 +599,14 @@ class _CashierSalesState extends State<CashierSales> {
                   remise: remise,
                   total: total,
                   numeroFacture: numeroFacture,
+                  montantPaye: montantPaye,
+                  montantRestant: montantRestant,
                 );
-                _showSnackBar('Reçu réimprimé avec succès', const Color(0xFF107C41));
+                _showSnackBar(
+                    'Reçu réimprimé avec succès', const Color(0xFF107C41));
               } catch (e) {
-                _showSnackBar('Erreur d\'impression: ${e.toString()}', const Color(0xFFC42B1C));
+                _showSnackBar('Erreur d\'impression: ${e.toString()}',
+                    const Color(0xFFC42B1C));
               }
             },
             icon: const Icon(Icons.print_outlined, size: 16),
@@ -446,7 +616,8 @@ class _CashierSalesState extends State<CashierSales> {
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
           ),
         ],
@@ -461,6 +632,8 @@ class _CashierSalesState extends State<CashierSales> {
     required List<Map<String, dynamic>> lignes,
     required double total,
     required double remise,
+    required double montantPaye,
+    required double montantRestant,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -471,8 +644,10 @@ class _CashierSalesState extends State<CashierSales> {
         const Divider(height: 12, thickness: 1, color: Color(0x12000000)),
         ...lignes.take(3).map((line) {
           final nom = line['produit_nom'] as String? ?? 'Produit';
-          final qte = line['quantite'] as int? ?? 0;
-          final prix = (line['prix_unitaire'] as num?)?.toDouble() ?? 0.0;
+          final qte = (line['quantite'] is int)
+              ? line['quantite'] as int
+              : int.tryParse(line['quantite']?.toString() ?? '0') ?? 0;
+          final prix = _toDouble(line['prix_unitaire']);
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 1.5),
             child: Row(
@@ -481,14 +656,21 @@ class _CashierSalesState extends State<CashierSales> {
                 Expanded(
                   child: Text(
                     '$qte x $nom',
-                    style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, color: Color(0xFF0F172A)),
+                    style: const TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontSize: 11.5,
+                        color: Color(0xFF0F172A)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Text(
                   '${(qte * prix).toStringAsFixed(2)} \$',
-                  style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                  style: const TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF0F172A)),
                 ),
               ],
             ),
@@ -500,14 +682,56 @@ class _CashierSalesState extends State<CashierSales> {
           children: [
             const Text(
               'Total Net TTC',
-              style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF0F172A)),
+              style: TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF0F172A)),
             ),
             Text(
               '${total.toStringAsFixed(2)} \$',
-              style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF0067C0)),
+              style: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: Color(0xFF0067C0)),
             ),
           ],
         ),
+        if (montantPaye > 0 || montantRestant > 0) ...[
+          const SizedBox(height: 4),
+          const Divider(height: 1, thickness: 1, color: Color(0x12000000)),
+          const SizedBox(height: 4),
+          _buildReceiptLine('Payé', '\$${montantPaye.toStringAsFixed(2)}'),
+          if (montantRestant > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1.5),
+              child: Row(
+                children: [
+                  const Text(
+                    'Reste à payer : ',
+                    style: TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontSize: 11.5,
+                      color: Color(0xFFB45309),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '\$${montantRestant.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontSize: 12.5,
+                        color: Color(0xFFB45309),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ],
     );
   }
@@ -519,12 +743,20 @@ class _CashierSalesState extends State<CashierSales> {
         children: [
           Text(
             '$label : ',
-            style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+            style: const TextStyle(
+                fontFamily: kAppFontFamily,
+                fontSize: 11.5,
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w500),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontSize: 11.5,
+                  color: Color(0xFF0F172A),
+                  fontWeight: FontWeight.w600),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -550,15 +782,10 @@ class _CashierSalesState extends State<CashierSales> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 1. Indicateurs Synthétiques avec Ondes Fluides
               _buildSalesMetricsRow(),
               const SizedBox(height: 18),
-
-              // 2. Barre d'outils (Recherche, Filtres, Nouvelle Vente)
               _buildActionBar(isWide),
               const SizedBox(height: 14),
-
-              // 3. Tableau de données Desktop
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
@@ -596,13 +823,14 @@ class _CashierSalesState extends State<CashierSales> {
   }
 
   // ---------------------------------------------------------------------------
-  // 1. LES CARTES DE MÉTRIQUES STYLISÉES AVEC ONDES FLUIDES (WINDOWS BLOOM)
+  // 1. LES CARTES DE MÉTRIQUES
   // ---------------------------------------------------------------------------
   Widget _buildSalesMetricsRow() {
     final total = _sales.length;
-    final enCours = _sales.where((s) => (s['statut'] ?? '') == 'en_cours').length;
+    final enCours =
+        _sales.where((s) => (s['statut'] ?? '') == 'en_cours').length;
     final cumulTTC = _sales.fold<double>(0.0, (sum, s) {
-      return sum + (double.tryParse(s['total_ttc']?.toString() ?? '0') ?? 0);
+      return sum + _toDouble(s['total_ttc']);
     });
 
     return LayoutBuilder(
@@ -619,7 +847,7 @@ class _CashierSalesState extends State<CashierSales> {
             gradient: const [
               Color(0xFF004E8C),
               Color(0xFF0067C0),
-              Color(0xFF2886DE),
+              Color(0xFF2886DE)
             ],
             waveSeed: 1.2,
           ),
@@ -632,7 +860,7 @@ class _CashierSalesState extends State<CashierSales> {
             gradient: const [
               Color(0xFF0A3B5C),
               Color(0xFF165B8C),
-              Color(0xFF3A89C9),
+              Color(0xFF3A89C9)
             ],
             waveSeed: 2.4,
           ),
@@ -645,7 +873,7 @@ class _CashierSalesState extends State<CashierSales> {
             gradient: const [
               Color(0xFF1E293B),
               Color(0xFF334155),
-              Color(0xFF475569),
+              Color(0xFF475569)
             ],
             waveSeed: 3.6,
           ),
@@ -721,7 +949,8 @@ class _CashierSalesState extends State<CashierSales> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -735,7 +964,8 @@ class _CashierSalesState extends State<CashierSales> {
                         child: Icon(icon, color: Colors.white, size: 16),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.25),
                           borderRadius: BorderRadius.circular(4),
@@ -757,7 +987,6 @@ class _CashierSalesState extends State<CashierSales> {
               ],
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
             child: Row(
@@ -833,7 +1062,6 @@ class _CashierSalesState extends State<CashierSales> {
 
     return Row(
       children: [
-        // Recherche
         SizedBox(
           width: isWide ? 280 : 180,
           height: 38,
@@ -843,12 +1071,17 @@ class _CashierSalesState extends State<CashierSales> {
             style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 13),
             decoration: InputDecoration(
               hintText: 'Rechercher client, numéro...',
-              hintStyle: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFFA0AEC0), fontSize: 12.5),
-              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF6B7280), size: 18),
+              hintStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  color: Color(0xFFA0AEC0),
+                  fontSize: 12.5),
+              prefixIcon: const Icon(Icons.search_rounded,
+                  color: Color(0xFF6B7280), size: 18),
               suffixIcon: _searchCtrl.text.isNotEmpty
                   ? IconButton(
                 splashRadius: 14,
-                icon: const Icon(Icons.clear_rounded, size: 15, color: Color(0xFF6B7280)),
+                icon: const Icon(Icons.clear_rounded,
+                    size: 15, color: Color(0xFF6B7280)),
                 onPressed: () {
                   _searchCtrl.clear();
                   _filterSales();
@@ -858,16 +1091,20 @@ class _CashierSalesState extends State<CashierSales> {
               filled: true,
               fillColor: const Color(0xFFFFFFFF),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0x18000000))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0x18000000))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.5)),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0x18000000))),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0x18000000))),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide:
+                  const BorderSide(color: Color(0xFF0067C0), width: 1.5)),
             ),
           ),
         ),
-
         const SizedBox(width: 12),
-
-        // Filtres
         Expanded(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -889,13 +1126,19 @@ class _CashierSalesState extends State<CashierSales> {
                     backgroundColor: const Color(0xFFFFFFFF),
                     labelStyle: TextStyle(
                       fontFamily: kAppFontFamily,
-                      color: isSelected ? const Color(0xFF0067C0) : const Color(0xFF475569),
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: isSelected
+                          ? const Color(0xFF0067C0)
+                          : const Color(0xFF475569),
+                      fontWeight:
+                      isSelected ? FontWeight.w700 : FontWeight.w500,
                       fontSize: 12,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
-                      side: BorderSide(color: isSelected ? const Color(0xFF0067C0) : const Color(0x18000000)),
+                      side: BorderSide(
+                          color: isSelected
+                              ? const Color(0xFF0067C0)
+                              : const Color(0x18000000)),
                     ),
                   ),
                 );
@@ -903,19 +1146,14 @@ class _CashierSalesState extends State<CashierSales> {
             ),
           ),
         ),
-
         const SizedBox(width: 12),
-
-        // Bouton Nouvelle Vente
         SizedBox(
           height: 38,
           child: ElevatedButton.icon(
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const CashierNewSale(),
-                ),
+                MaterialPageRoute(builder: (_) => const CashierNewSale()),
               ).then((_) => _loadSales());
             },
             icon: const Icon(Icons.add_rounded, size: 17),
@@ -925,7 +1163,8 @@ class _CashierSalesState extends State<CashierSales> {
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
               textStyle: const TextStyle(
                 fontFamily: kAppFontFamily,
                 fontWeight: FontWeight.w700,
@@ -940,7 +1179,7 @@ class _CashierSalesState extends State<CashierSales> {
   }
 
   // ---------------------------------------------------------------------------
-  // 3. TABLEAU DESKTOP HAUTE LISIBILITÉ
+  // 3. TABLEAU DESKTOP
   // ---------------------------------------------------------------------------
   Widget _buildDesktopDataTable() {
     return LayoutBuilder(
@@ -952,7 +1191,8 @@ class _CashierSalesState extends State<CashierSales> {
             child: ConstrainedBox(
               constraints: BoxConstraints(minWidth: constraints.maxWidth),
               child: DataTable(
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                headingRowColor:
+                WidgetStateProperty.all(const Color(0xFFF8FAFC)),
                 headingRowHeight: 42,
                 dataRowMinHeight: 52,
                 dataRowMaxHeight: 52,
@@ -969,16 +1209,20 @@ class _CashierSalesState extends State<CashierSales> {
                 ],
                 rows: _filteredSales.map((sale) {
                   final status = sale['statut'] as String? ?? 'en_cours';
-                  final total = double.tryParse(sale['total_ttc']?.toString() ?? '0') ?? 0;
-                  final client = sale['client_nom'] as String? ?? 'Client de passage';
+                  final total = _toDouble(sale['total_ttc']);
+                  final restant = _toDouble(sale['montant_restant']);
+                  final client = sale['client_nom'] as String?
+                      ?? sale['client_nom_libre'] as String?
+                      ?? 'Client de passage';
                   final numero = sale['numero_facture'] as String? ?? '';
                   final date = sale['created_at'] as String? ?? '';
-                  final canValidate = status == 'en_cours';
+                  final canValidate = _canEncaisser && (status == 'en_cours') && restant > 0;
 
                   String formattedDate = '';
                   try {
                     final dateTime = DateTime.parse(date);
-                    formattedDate = '${dateTime.day.toString().padLeft(2, '0')}/${dateTime.month.toString().padLeft(2, '0')}/${dateTime.year} à '
+                    formattedDate =
+                    '${dateTime.day.toString().padLeft(2, '0')}/${dateTime.month.toString().padLeft(2, '0')}/${dateTime.year} à '
                         '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
                   } catch (_) {
                     formattedDate = date;
@@ -986,10 +1230,10 @@ class _CashierSalesState extends State<CashierSales> {
 
                   return DataRow(
                     cells: [
-                      // N° Facture
                       DataCell(
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF1F5F9),
                             borderRadius: BorderRadius.circular(6),
@@ -1006,8 +1250,6 @@ class _CashierSalesState extends State<CashierSales> {
                           ),
                         ),
                       ),
-
-                      // Date & Heure
                       DataCell(
                         Text(
                           formattedDate,
@@ -1018,8 +1260,6 @@ class _CashierSalesState extends State<CashierSales> {
                           ),
                         ),
                       ),
-
-                      // Client
                       DataCell(
                         Text(
                           client,
@@ -1031,37 +1271,51 @@ class _CashierSalesState extends State<CashierSales> {
                           ),
                         ),
                       ),
-
-                      // Montant
                       DataCell(
-                        Text(
-                          '${total.toStringAsFixed(2)} \$',
-                          style: const TextStyle(
-                            fontFamily: kAppFontFamily,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF0067C0),
-                            fontSize: 13.5,
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '${total.toStringAsFixed(2)} \$',
+                              style: const TextStyle(
+                                fontFamily: kAppFontFamily,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0067C0),
+                                fontSize: 13.5,
+                              ),
+                            ),
+                            if (restant > 0)
+                              Text(
+                                'Reste: ${restant.toStringAsFixed(2)} \$',
+                                style: const TextStyle(
+                                  fontFamily: kAppFontFamily,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFFB45309),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-
-                      // Statut
                       DataCell(_buildStatusBadge(status)),
-
-                      // Actions
                       DataCell(
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             if (canValidate) ...[
                               ElevatedButton(
-                                onPressed: _isActionLoading ? null : () => _validateInvoice(sale),
+                                onPressed: _isActionLoading
+                                    ? null
+                                    : () => _validateInvoice(sale),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF0067C0),
                                   foregroundColor: Colors.white,
                                   elevation: 0,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(6)),
                                   textStyle: const TextStyle(
                                     fontFamily: kAppFontFamily,
                                     fontSize: 11.5,
@@ -1073,7 +1327,8 @@ class _CashierSalesState extends State<CashierSales> {
                               const SizedBox(width: 8),
                             ],
                             IconButton(
-                              icon: const Icon(Icons.print_outlined, size: 17, color: Color(0xFF0067C0)),
+                              icon: const Icon(Icons.print_outlined,
+                                  size: 17, color: Color(0xFF0067C0)),
                               splashRadius: 14,
                               tooltip: 'Réimprimer le reçu client',
                               onPressed: () => _reprintReceipt(sale),
@@ -1107,14 +1362,16 @@ class _CashierSalesState extends State<CashierSales> {
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: _filteredSales.length,
-      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0x12000000)),
+      separatorBuilder: (_, __) =>
+      const Divider(height: 1, color: Color(0x12000000)),
       itemBuilder: (context, index) {
         final sale = _filteredSales[index];
         final status = sale['statut'] as String? ?? 'en_cours';
-        final total = double.tryParse(sale['total_ttc']?.toString() ?? '0') ?? 0;
+        final total = _toDouble(sale['total_ttc']);
+        final restant = _toDouble(sale['montant_restant']);
         final client = sale['client_nom'] as String? ?? 'Client';
         final numero = sale['numero_facture'] as String? ?? '';
-        final canValidate = status == 'en_cours';
+        final canValidate = _canEncaisser && (status == 'en_cours') && restant > 0;
 
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
@@ -1126,7 +1383,11 @@ class _CashierSalesState extends State<CashierSales> {
                 children: [
                   Text(
                     numero,
-                    style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF0067C0)),
+                    style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        color: Color(0xFF0067C0)),
                   ),
                   _buildStatusBadge(status),
                 ],
@@ -1137,11 +1398,33 @@ class _CashierSalesState extends State<CashierSales> {
                 children: [
                   Text(
                     client,
-                    style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 13.5, color: Color(0xFF0F172A)),
+                    style: const TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.5,
+                        color: Color(0xFF0F172A)),
                   ),
-                  Text(
-                    '${total.toStringAsFixed(2)} \$',
-                    style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF0067C0)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${total.toStringAsFixed(2)} \$',
+                        style: const TextStyle(
+                            fontFamily: kAppFontFamily,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: Color(0xFF0067C0)),
+                      ),
+                      if (restant > 0)
+                        Text(
+                          'Reste: ${restant.toStringAsFixed(2)} \$',
+                          style: const TextStyle(
+                              fontFamily: kAppFontFamily,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFB45309)),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -1151,15 +1434,22 @@ class _CashierSalesState extends State<CashierSales> {
                 children: [
                   if (canValidate) ...[
                     ElevatedButton(
-                      onPressed: _isActionLoading ? null : () => _validateInvoice(sale),
+                      onPressed:
+                      _isActionLoading ? null : () => _validateInvoice(sale),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0067C0),
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6)),
                       ),
-                      child: const Text('Encaisser', style: TextStyle(fontFamily: kAppFontFamily, fontSize: 12, fontWeight: FontWeight.w700)),
+                      child: const Text('Encaisser',
+                          style: TextStyle(
+                              fontFamily: kAppFontFamily,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700)),
                     ),
                     const SizedBox(width: 8),
                   ],
@@ -1170,8 +1460,10 @@ class _CashierSalesState extends State<CashierSales> {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF475569),
                       side: const BorderSide(color: Color(0x20000000)),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6)),
                     ),
                   ),
                 ],
@@ -1184,7 +1476,7 @@ class _CashierSalesState extends State<CashierSales> {
   }
 
   // ---------------------------------------------------------------------------
-  // BADGE STATUT SOBRE
+  // BADGE STATUT
   // ---------------------------------------------------------------------------
   Widget _buildStatusBadge(String status) {
     Color color;
@@ -1243,12 +1535,16 @@ class _CashierSalesState extends State<CashierSales> {
           children: [
             Container(
               padding: const EdgeInsets.all(14),
-              decoration: const BoxDecoration(color: Color(0xFFF1F5F9), shape: BoxShape.circle),
-              child: const Icon(Icons.shopping_cart_outlined, size: 32, color: Color(0xFF94A3B8)),
+              decoration: const BoxDecoration(
+                  color: Color(0xFFF1F5F9), shape: BoxShape.circle),
+              child: const Icon(Icons.shopping_cart_outlined,
+                  size: 32, color: Color(0xFF94A3B8)),
             ),
             const SizedBox(height: 14),
             Text(
-              _searchCtrl.text.isEmpty ? 'Aucune vente enregistrée' : 'Aucune transaction trouvée',
+              _searchCtrl.text.isEmpty
+                  ? 'Aucune vente enregistrée'
+                  : 'Aucune transaction trouvée',
               style: const TextStyle(
                 fontFamily: kAppFontFamily,
                 fontSize: 15,
@@ -1278,9 +1574,14 @@ class _CashierSalesState extends State<CashierSales> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF0067C0),
                   side: const BorderSide(color: Color(0xFF0067C0)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
                 ),
-                child: const Text('Effacer la recherche', style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w600, fontSize: 12)),
+                child: const Text('Effacer la recherche',
+                    style: TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12)),
               ),
             ],
           ],
@@ -1291,7 +1592,7 @@ class _CashierSalesState extends State<CashierSales> {
 }
 
 // ---------------------------------------------------------------------------
-// PAINTER VECTORIEL : ONDES FLUIDES DES CARTES DE VENTES
+// PAINTER VECTORIEL : ONDES FLUIDES
 // ---------------------------------------------------------------------------
 class SalesMetricWavePainter extends CustomPainter {
   final double waveSeed;

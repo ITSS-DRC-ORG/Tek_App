@@ -34,8 +34,8 @@ class _StockTransfersState extends State<StockTransfers>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
-  // Rôle utilisateur
-  bool _isAdmin = false;
+  // Rôle utilisateur : admin OU gestionnaire peuvent gérer les transferts
+  bool _canManageTransfers = false;
 
   @override
   void initState() {
@@ -67,7 +67,8 @@ class _StockTransfersState extends State<StockTransfers>
       if (user != null) {
         final service = AdminService(user.token);
 
-        _isAdmin = user.role == UserRole.admin;
+        _canManageTransfers = user.role == UserRole.admin ||
+            user.role == UserRole.gestionnaire;
 
         final depots = await service.getDepots();
         final products = await service.getAllProducts();
@@ -95,13 +96,13 @@ class _StockTransfersState extends State<StockTransfers>
   }
 
   // ---------------------------------------------------------------------------
-  // VALIDATION TRANSFERT (Réservée aux admins)
+  // VALIDATION TRANSFERT (admin ou gestionnaire)
   // ---------------------------------------------------------------------------
   Future<void> _validerTransfert(Transfert transfert) async {
-    if (!_isAdmin) {
+    if (!_canManageTransfers) {
       _showPermissionErrorDialog(
         'Action non autorisée',
-        'Seuls les administrateurs peuvent valider les transferts inter-dépôts.\n\nVotre compte ne dispose pas des privilèges suffisants.',
+        'Seuls les administrateurs et gestionnaires peuvent valider les transferts inter-dépôts.\n\nVotre compte ne dispose pas des privilèges suffisants.',
         Icons.lock_outline_rounded,
       );
       return;
@@ -123,12 +124,13 @@ class _StockTransfersState extends State<StockTransfers>
 
       final service = AdminService(user.token);
       await service.validerTransfert(transfert.id);
-      _showSnackBar('Transfert #${transfert.numeroBon} validé avec succès', const Color(0xFF107C41));
+      _showSnackBar('Transfert #${transfert.numeroBon} validé avec succès',
+          const Color(0xFF107C41));
       _refreshData();
     } on PermissionException catch (e) {
       _showPermissionErrorDialog(
         'Action non autorisée',
-        '${e.message}\n\nSeuls les administrateurs peuvent valider les transferts.',
+        '${e.message}\n\nSeuls les administrateurs et gestionnaires peuvent valider les transferts.',
         Icons.lock_outline_rounded,
       );
     } catch (e) {
@@ -139,10 +141,10 @@ class _StockTransfersState extends State<StockTransfers>
   }
 
   Future<void> _effectuerTransfert(Transfert transfert) async {
-    if (!_isAdmin) {
+    if (!_canManageTransfers) {
       _showPermissionErrorDialog(
         'Action non autorisée',
-        'Seuls les administrateurs peuvent exécuter les transferts.\n\nVotre compte ne dispose pas des privilèges suffisants.',
+        'Seuls les administrateurs et gestionnaires peuvent exécuter les transferts.\n\nVotre compte ne dispose pas des privilèges suffisants.',
         Icons.lock_outline_rounded,
       );
       return;
@@ -164,12 +166,13 @@ class _StockTransfersState extends State<StockTransfers>
 
       final service = AdminService(user.token);
       await service.effectuerTransfert(transfert.id);
-      _showSnackBar('Transfert #${transfert.numeroBon} exécuté avec succès', const Color(0xFF107C41));
+      _showSnackBar('Transfert #${transfert.numeroBon} exécuté avec succès',
+          const Color(0xFF107C41));
       _refreshData();
     } on PermissionException catch (e) {
       _showPermissionErrorDialog(
         'Action non autorisée',
-        '${e.message}\n\nSeuls les administrateurs peuvent effectuer les transferts.',
+        '${e.message}\n\nSeuls les administrateurs et gestionnaires peuvent effectuer les transferts.',
         Icons.lock_outline_rounded,
       );
     } catch (e) {
@@ -180,10 +183,10 @@ class _StockTransfersState extends State<StockTransfers>
   }
 
   Future<void> _annulerTransfert(Transfert transfert) async {
-    if (!_isAdmin) {
+    if (!_canManageTransfers) {
       _showPermissionErrorDialog(
         'Action non autorisée',
-        'Seuls les administrateurs peuvent annuler les transferts.',
+        'Seuls les administrateurs et gestionnaires peuvent annuler les transferts.',
         Icons.lock_outline_rounded,
       );
       return;
@@ -205,12 +208,13 @@ class _StockTransfersState extends State<StockTransfers>
 
       final service = AdminService(user.token);
       await service.annulerTransfert(transfert.id);
-      _showSnackBar('Transfert #${transfert.numeroBon} annulé', const Color(0xFFD97706));
+      _showSnackBar('Transfert #${transfert.numeroBon} annulé',
+          const Color(0xFFD97706));
       _refreshData();
     } on PermissionException catch (e) {
       _showPermissionErrorDialog(
         'Action non autorisée',
-        '${e.message}\n\nSeuls les administrateurs peuvent annuler les transferts.',
+        '${e.message}\n\nSeuls les administrateurs et gestionnaires peuvent annuler les transferts.',
         Icons.lock_outline_rounded,
       );
     } catch (e) {
@@ -280,7 +284,8 @@ class _StockTransfersState extends State<StockTransfers>
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.info_outline_rounded, color: Color(0xFF64748B), size: 16),
+                  Icon(Icons.info_outline_rounded,
+                      color: Color(0xFF64748B), size: 16),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -305,11 +310,13 @@ class _StockTransfersState extends State<StockTransfers>
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             child: const Text(
               'Compris',
-              style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                  fontFamily: kAppFontFamily, fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -369,7 +376,7 @@ class _StockTransfersState extends State<StockTransfers>
   }
 
   // ---------------------------------------------------------------------------
-  // CONFIRM DIALOG WINDOWS 11
+  // CONFIRM DIALOG
   // ---------------------------------------------------------------------------
   Future<bool> _showConfirmDialog(
       String title, String message, String action, Color color) async {
@@ -378,7 +385,8 @@ class _StockTransfersState extends State<StockTransfers>
       builder: (dialogContext) => AlertDialog(
         backgroundColor: const Color(0xFFFFFFFF),
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape:
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         titlePadding: const EdgeInsets.fromLTRB(22, 20, 22, 12),
         contentPadding: const EdgeInsets.symmetric(horizontal: 22),
         actionsPadding: const EdgeInsets.fromLTRB(22, 12, 22, 18),
@@ -390,7 +398,8 @@ class _StockTransfersState extends State<StockTransfers>
                 color: color.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: Icon(Icons.swap_horiz_rounded, color: color, size: 20),
+              child:
+              Icon(Icons.swap_horiz_rounded, color: color, size: 20),
             ),
             const SizedBox(width: 12),
             Text(
@@ -431,8 +440,10 @@ class _StockTransfersState extends State<StockTransfers>
               backgroundColor: color,
               foregroundColor: Colors.white,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             child: Text(
               action,
@@ -449,13 +460,13 @@ class _StockTransfersState extends State<StockTransfers>
   }
 
   // ---------------------------------------------------------------------------
-  // CRÉER TRANSFERT (Modale Windows 11 Fluent)
+  // CRÉER TRANSFERT
   // ---------------------------------------------------------------------------
   void _showCreateTransferDialog() {
-    if (!_isAdmin) {
+    if (!_canManageTransfers) {
       _showPermissionErrorDialog(
         'Action non autorisée',
-        'Seuls les administrateurs peuvent initier des transferts de stock.\n\nVotre compte ne dispose pas des privilèges nécessaires.',
+        'Seuls les administrateurs et gestionnaires peuvent initier des transferts de stock.\n\nVotre compte ne dispose pas des privilèges nécessaires.',
         Icons.lock_outline_rounded,
       );
       return;
@@ -477,7 +488,8 @@ class _StockTransfersState extends State<StockTransfers>
           return Dialog(
             elevation: 0,
             backgroundColor: Colors.transparent,
-            insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            insetPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             child: Container(
               width: 680,
               constraints: BoxConstraints(
@@ -500,7 +512,6 @@ class _StockTransfersState extends State<StockTransfers>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // En-tête Fluent sobre
                   Padding(
                     padding: const EdgeInsets.fromLTRB(22, 18, 16, 16),
                     child: Row(
@@ -547,15 +558,15 @@ class _StockTransfersState extends State<StockTransfers>
                           splashRadius: 16,
                           icon: const Icon(Icons.close_rounded, size: 19),
                           color: const Color(0xFF64748B),
-                          onPressed: isSubmitting ? null : () => Navigator.pop(dialogContext),
+                          onPressed: isSubmitting
+                              ? null
+                              : () => Navigator.pop(dialogContext),
                         ),
                       ],
                     ),
                   ),
-
-                  const Divider(height: 1, thickness: 1, color: Color(0x14000000)),
-
-                  // Contenu Formulaire
+                  const Divider(
+                      height: 1, thickness: 1, color: Color(0x14000000)),
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(22),
@@ -570,7 +581,8 @@ class _StockTransfersState extends State<StockTransfers>
                                   'Sélectionner la source',
                                   selectedDepotSource,
                                   _depots,
-                                      (value) => setStateModal(() => selectedDepotSource = value),
+                                      (value) => setStateModal(
+                                          () => selectedDepotSource = value),
                                 ),
                               ),
                               const SizedBox(width: 14),
@@ -579,8 +591,12 @@ class _StockTransfersState extends State<StockTransfers>
                                   'DÉPÔT DESTINATION (CRÉDIT)',
                                   'Sélectionner la cible',
                                   selectedDepotDestination,
-                                  _depots.where((d) => d.id != selectedDepotSource).toList(),
-                                      (value) => setStateModal(() => selectedDepotDestination = value),
+                                  _depots
+                                      .where((d) =>
+                                  d.id != selectedDepotSource)
+                                      .toList(),
+                                      (value) => setStateModal(
+                                          () => selectedDepotDestination = value),
                                 ),
                               ),
                             ],
@@ -603,27 +619,30 @@ class _StockTransfersState extends State<StockTransfers>
                             setStateModal,
                           ),
                           const SizedBox(height: 16),
-                          if (lignes.isNotEmpty) _buildTransfertResume(lignes),
+                          if (lignes.isNotEmpty)
+                            _buildTransfertResume(lignes),
                         ],
                       ),
                     ),
                   ),
-
-                  const Divider(height: 1, thickness: 1, color: Color(0x14000000)),
-
-                  // Footer Actions
+                  const Divider(
+                      height: 1, thickness: 1, color: Color(0x14000000)),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(22, 12, 22, 16),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         OutlinedButton(
-                          onPressed: isSubmitting ? null : () => Navigator.pop(dialogContext),
+                          onPressed: isSubmitting
+                              ? null
+                              : () => Navigator.pop(dialogContext),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFF475569),
                             side: const BorderSide(color: Color(0x20000000)),
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 18, vertical: 11),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
                           ),
                           child: const Text(
                             'Annuler',
@@ -644,14 +663,22 @@ class _StockTransfersState extends State<StockTransfers>
                               : () async {
                             setStateModal(() => isSubmitting = true);
                             try {
-                              final user = Provider.of<AuthProvider>(context, listen: false).user;
+                              final user =
+                                  Provider.of<AuthProvider>(context,
+                                      listen: false)
+                                      .user;
                               if (user == null) return;
 
-                              final service = AdminService(user.token);
-                              final transfert = await service.createTransfert(
+                              final service =
+                              AdminService(user.token);
+                              final transfert =
+                              await service.createTransfert(
                                 depotSourceId: selectedDepotSource!,
-                                depotDestinationId: selectedDepotDestination!,
-                                motif: motifCtrl.text.isNotEmpty ? motifCtrl.text : selectedMotif,
+                                depotDestinationId:
+                                selectedDepotDestination!,
+                                motif: motifCtrl.text.isNotEmpty
+                                    ? motifCtrl.text
+                                    : selectedMotif,
                                 lignes: lignes,
                               );
 
@@ -662,7 +689,9 @@ class _StockTransfersState extends State<StockTransfers>
                               Navigator.pop(dialogContext);
                               _refreshData();
                             } catch (e) {
-                              _showSnackBar('Erreur: ${e.toString()}', const Color(0xFFC42B1C));
+                              _showSnackBar(
+                                  'Erreur: ${e.toString()}',
+                                  const Color(0xFFC42B1C));
                             } finally {
                               setStateModal(() => isSubmitting = false);
                             }
@@ -671,8 +700,10 @@ class _StockTransfersState extends State<StockTransfers>
                             backgroundColor: const Color(0xFF0067C0),
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 11),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
                           ),
                           child: isSubmitting
                               ? const SizedBox(
@@ -680,7 +711,8 @@ class _StockTransfersState extends State<StockTransfers>
                             height: 16,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation(Colors.white),
+                              valueColor: AlwaysStoppedAnimation(
+                                  Colors.white),
                             ),
                           )
                               : const Row(
@@ -745,17 +777,24 @@ class _StockTransfersState extends State<StockTransfers>
           child: DropdownButton<int>(
             value: selectedValue,
             isExpanded: true,
-            hint: Text(hint, style: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFFA0AEC0), fontSize: 12.5)),
+            hint: Text(hint,
+                style: const TextStyle(
+                    fontFamily: kAppFontFamily,
+                    color: Color(0xFFA0AEC0),
+                    fontSize: 12.5)),
             underline: const SizedBox(),
             dropdownColor: const Color(0xFFFFFFFF),
-            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B), size: 18),
+            icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                color: Color(0xFF64748B), size: 18),
             items: depots.map((depot) {
               return DropdownMenuItem(
                 value: depot.id,
                 child: Row(
                   children: [
                     Icon(
-                      depot.estMagasin ? Icons.storefront_outlined : Icons.warehouse_outlined,
+                      depot.estMagasin
+                          ? Icons.storefront_outlined
+                          : Icons.warehouse_outlined,
                       color: const Color(0xFF0067C0),
                       size: 16,
                     ),
@@ -821,13 +860,18 @@ class _StockTransfersState extends State<StockTransfers>
               backgroundColor: const Color(0xFFF8FAFC),
               labelStyle: TextStyle(
                 fontFamily: kAppFontFamily,
-                color: isSelected ? const Color(0xFF0067C0) : const Color(0xFF475569),
+                color: isSelected
+                    ? const Color(0xFF0067C0)
+                    : const Color(0xFF475569),
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 fontSize: 12,
               ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(6),
-                side: BorderSide(color: isSelected ? const Color(0xFF0067C0) : const Color(0xFFE2E8F0)),
+                side: BorderSide(
+                    color: isSelected
+                        ? const Color(0xFF0067C0)
+                        : const Color(0xFFE2E8F0)),
               ),
             );
           }).toList(),
@@ -839,13 +883,24 @@ class _StockTransfersState extends State<StockTransfers>
             style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 13),
             decoration: InputDecoration(
               hintText: 'Précisez le motif du transfert...',
-              hintStyle: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFFA0AEC0), fontSize: 12.5),
+              hintStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  color: Color(0xFFA0AEC0),
+                  fontSize: 12.5),
               filled: true,
               fillColor: const Color(0xFFF8FAFC),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.5)),
+              contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide:
+                  const BorderSide(color: Color(0xFF0067C0), width: 1.5)),
             ),
             onChanged: (value) => onChanged(value),
           ),
@@ -900,9 +955,14 @@ class _StockTransfersState extends State<StockTransfers>
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF0067C0),
                     side: const BorderSide(color: Color(0xFF0067C0)),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                    textStyle: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, fontWeight: FontWeight.w600),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6)),
+                    textStyle: const TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
             ],
@@ -914,7 +974,10 @@ class _StockTransfersState extends State<StockTransfers>
                 padding: EdgeInsets.symmetric(vertical: 16),
                 child: Text(
                   'Aucun article ajouté au transfert',
-                  style: TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF94A3B8), fontSize: 12.5),
+                  style: TextStyle(
+                      fontFamily: kAppFontFamily,
+                      color: Color(0xFF94A3B8),
+                      fontSize: 12.5),
                 ),
               ),
             )
@@ -923,10 +986,12 @@ class _StockTransfersState extends State<StockTransfers>
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: lignes.length,
-              separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0x12000000)),
+              separatorBuilder: (_, __) =>
+              const Divider(height: 1, color: Color(0x12000000)),
               itemBuilder: (context, index) {
                 final ligne = lignes[index];
-                final product = products.where((p) => p.id == ligne.produitId).firstOrNull;
+                final product =
+                    products.where((p) => p.id == ligne.produitId).firstOrNull;
                 final productName = product?.nom ?? 'Article inconnu';
                 final productCode = product?.code ?? 'N/A';
                 final productUnite = product?.unite ?? 'unité';
@@ -936,31 +1001,45 @@ class _StockTransfersState extends State<StockTransfers>
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: const Color(0xFFE2E8F0),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           productCode,
-                          style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700, fontSize: 11, color: Color(0xFF1E293B)),
+                          style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                              color: Color(0xFF1E293B)),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           productName,
-                          style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF0F172A)),
+                          style: const TextStyle(
+                              fontFamily: kAppFontFamily,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              color: Color(0xFF0F172A)),
                         ),
                       ),
                       Text(
                         'Qté: ${ligne.quantite} $productUnite',
-                        style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w600, fontSize: 12.5, color: Color(0xFF0067C0)),
+                        style: const TextStyle(
+                            fontFamily: kAppFontFamily,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12.5,
+                            color: Color(0xFF0067C0)),
                       ),
                       const SizedBox(width: 10),
                       IconButton(
                         splashRadius: 14,
-                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFC42B1C), size: 18),
+                        icon: const Icon(Icons.delete_outline_rounded,
+                            color: Color(0xFFC42B1C), size: 18),
                         onPressed: () {
                           setStateModal(() {
                             lignes.removeAt(index);
@@ -986,24 +1065,32 @@ class _StockTransfersState extends State<StockTransfers>
       ) {
     int? selectedProductId;
     int quantity = 1;
-    final TextEditingController quantityCtrl = TextEditingController(text: '1');
+    final TextEditingController quantityCtrl =
+    TextEditingController(text: '1');
 
     showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setStateDialog) {
           final availableProducts = products.where((p) {
-            final stock = stocks.where((s) => s.produitId == p.id && s.depotId == depotSourceId).firstOrNull;
+            final stock = stocks
+                .where(
+                    (s) => s.produitId == p.id && s.depotId == depotSourceId)
+                .firstOrNull;
             return stock != null && stock.quantite > 0;
           }).toList();
 
           return AlertDialog(
             backgroundColor: const Color(0xFFFFFFFF),
             surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             title: const Text(
               'Ajouter un article au bon',
-              style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 16),
+              style: TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16),
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1012,25 +1099,31 @@ class _StockTransfersState extends State<StockTransfers>
                 DropdownButton<int>(
                   value: selectedProductId,
                   isExpanded: true,
-                  hint: const Text('Sélectionner un article disponible', style: TextStyle(fontFamily: kAppFontFamily, fontSize: 13)),
+                  hint: const Text('Sélectionner un article disponible',
+                      style: TextStyle(
+                          fontFamily: kAppFontFamily, fontSize: 13)),
                   dropdownColor: const Color(0xFFFFFFFF),
                   items: availableProducts.map((p) {
-                    final stock = stocks.firstWhere((s) => s.produitId == p.id && s.depotId == depotSourceId);
+                    final stock = stocks.firstWhere((s) =>
+                    s.produitId == p.id && s.depotId == depotSourceId);
                     return DropdownMenuItem(
                       value: p.id,
                       child: Text(
                         '${p.nom} (Dispo : ${stock.quantite} ${p.unite})',
-                        style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 13),
+                        style: const TextStyle(
+                            fontFamily: kAppFontFamily, fontSize: 13),
                       ),
                     );
                   }).toList(),
-                  onChanged: (value) => setStateDialog(() => selectedProductId = value),
+                  onChanged: (value) =>
+                      setStateDialog(() => selectedProductId = value),
                 ),
                 const SizedBox(height: 14),
                 TextField(
                   controller: quantityCtrl,
                   keyboardType: TextInputType.number,
-                  style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 13),
+                  style: const TextStyle(
+                      fontFamily: kAppFontFamily, fontSize: 13),
                   decoration: const InputDecoration(
                     labelText: 'Quantité à transférer',
                     border: OutlineInputBorder(),
@@ -1047,7 +1140,8 @@ class _StockTransfersState extends State<StockTransfers>
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Annuler', style: TextStyle(fontFamily: kAppFontFamily)),
+                child: const Text('Annuler',
+                    style: TextStyle(fontFamily: kAppFontFamily)),
               ),
               ElevatedButton(
                 onPressed: selectedProductId == null
@@ -1064,9 +1158,13 @@ class _StockTransfersState extends State<StockTransfers>
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF0067C0),
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
                 ),
-                child: const Text('Ajouter', style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700)),
+                child: const Text('Ajouter',
+                    style: TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontWeight: FontWeight.w700)),
               ),
             ],
           );
@@ -1088,11 +1186,19 @@ class _StockTransfersState extends State<StockTransfers>
         children: [
           const Text(
             'RÉCAPITULATIF :',
-            style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 11, color: Color(0xFF0067C0)),
+            style: TextStyle(
+                fontFamily: kAppFontFamily,
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+                color: Color(0xFF0067C0)),
           ),
           Text(
             '${lignes.length} référence(s) • $totalItems unités au total',
-            style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 12.5, color: Color(0xFF0067C0)),
+            style: const TextStyle(
+                fontFamily: kAppFontFamily,
+                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+                color: Color(0xFF0067C0)),
           ),
         ],
       ),
@@ -1120,21 +1226,17 @@ class _StockTransfersState extends State<StockTransfers>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 1. Indicateurs Synthétiques avec Ondes Fluides
             _buildTransferMetricsRow(),
             const SizedBox(height: 18),
-
-            // 2. Barre d'outils et Filtres
             _buildActionBar(isWide),
             const SizedBox(height: 14),
-
-            // 3. Tableau de données principal
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFFFFF),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0x18000000), width: 1),
+                  border: Border.all(
+                      color: const Color(0x18000000), width: 1),
                   boxShadow: const [
                     BoxShadow(
                       color: Color(0x06000000),
@@ -1158,11 +1260,12 @@ class _StockTransfersState extends State<StockTransfers>
   }
 
   // ---------------------------------------------------------------------------
-  // 1. LES CARTES DE MÉTRIQUES STYLISÉES AVEC ONDES FLUIDES (WINDOWS BLOOM)
+  // 1. MÉTRIQUES
   // ---------------------------------------------------------------------------
   Widget _buildTransferMetricsRow() {
     final total = _transferts.length;
-    final enAttente = _transferts.where((t) => t.statut == 'en_attente').length;
+    final enAttente =
+        _transferts.where((t) => t.statut == 'en_attente').length;
     final effectues = _transferts.where((t) => t.statut == 'effectue').length;
 
     return LayoutBuilder(
@@ -1179,7 +1282,7 @@ class _StockTransfersState extends State<StockTransfers>
             gradient: const [
               Color(0xFF004E8C),
               Color(0xFF0067C0),
-              Color(0xFF2886DE),
+              Color(0xFF2886DE)
             ],
             waveSeed: 1.2,
           ),
@@ -1192,7 +1295,7 @@ class _StockTransfersState extends State<StockTransfers>
             gradient: const [
               Color(0xFF0A3B5C),
               Color(0xFF165B8C),
-              Color(0xFF3A89C9),
+              Color(0xFF3A89C9)
             ],
             waveSeed: 2.4,
           ),
@@ -1205,7 +1308,7 @@ class _StockTransfersState extends State<StockTransfers>
             gradient: const [
               Color(0xFF1E293B),
               Color(0xFF334155),
-              Color(0xFF475569),
+              Color(0xFF475569)
             ],
             waveSeed: 3.6,
           ),
@@ -1262,7 +1365,6 @@ class _StockTransfersState extends State<StockTransfers>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Bannière supérieure fluide
           SizedBox(
             height: 64,
             child: Stack(
@@ -1282,7 +1384,8 @@ class _StockTransfersState extends State<StockTransfers>
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -1296,7 +1399,8 @@ class _StockTransfersState extends State<StockTransfers>
                         child: Icon(icon, color: Colors.white, size: 16),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.25),
                           borderRadius: BorderRadius.circular(4),
@@ -1318,8 +1422,6 @@ class _StockTransfersState extends State<StockTransfers>
               ],
             ),
           ),
-
-          // Pied de carte blanc
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
             child: Row(
@@ -1395,7 +1497,6 @@ class _StockTransfersState extends State<StockTransfers>
 
     return Row(
       children: [
-        // Pastilles de filtre
         Expanded(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -1412,13 +1513,19 @@ class _StockTransfersState extends State<StockTransfers>
                     backgroundColor: const Color(0xFFFFFFFF),
                     labelStyle: TextStyle(
                       fontFamily: kAppFontFamily,
-                      color: isSelected ? const Color(0xFF0067C0) : const Color(0xFF475569),
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: isSelected
+                          ? const Color(0xFF0067C0)
+                          : const Color(0xFF475569),
+                      fontWeight:
+                      isSelected ? FontWeight.w700 : FontWeight.w500,
                       fontSize: 12,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
-                      side: BorderSide(color: isSelected ? const Color(0xFF0067C0) : const Color(0x18000000)),
+                      side: BorderSide(
+                          color: isSelected
+                              ? const Color(0xFF0067C0)
+                              : const Color(0x18000000)),
                     ),
                   ),
                 );
@@ -1426,37 +1533,36 @@ class _StockTransfersState extends State<StockTransfers>
             ),
           ),
         ),
-
         const SizedBox(width: 12),
-
-        // Bouton Nouveau Transfert
-        SizedBox(
-          height: 38,
-          child: ElevatedButton.icon(
-            onPressed: _showCreateTransferDialog,
-            icon: const Icon(Icons.add_rounded, size: 17),
-            label: Text(isWide ? "Nouveau Transfert" : "Créer"),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0067C0),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              textStyle: const TextStyle(
-                fontFamily: kAppFontFamily,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                letterSpacing: 0.1,
+        if (_canManageTransfers)
+          SizedBox(
+            height: 38,
+            child: ElevatedButton.icon(
+              onPressed: _showCreateTransferDialog,
+              icon: const Icon(Icons.add_rounded, size: 17),
+              label: Text(isWide ? "Nouveau Transfert" : "Créer"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0067C0),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                textStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  letterSpacing: 0.1,
+                ),
               ),
             ),
           ),
-        ),
       ],
     );
   }
 
   // ---------------------------------------------------------------------------
-  // 3. TABLEAU DESKTOP HAUTE LISIBILITÉ
+  // 3. TABLEAU DESKTOP
   // ---------------------------------------------------------------------------
   Widget _buildDesktopDataTable() {
     return LayoutBuilder(
@@ -1468,7 +1574,8 @@ class _StockTransfersState extends State<StockTransfers>
             child: ConstrainedBox(
               constraints: BoxConstraints(minWidth: constraints.maxWidth),
               child: DataTable(
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                headingRowColor:
+                WidgetStateProperty.all(const Color(0xFFF8FAFC)),
                 headingRowHeight: 42,
                 dataRowMinHeight: 52,
                 dataRowMaxHeight: 52,
@@ -1477,7 +1584,8 @@ class _StockTransfersState extends State<StockTransfers>
                 dividerThickness: 1,
                 columns: const [
                   DataColumn(label: Text("N° BON", style: _headerStyle)),
-                  DataColumn(label: Text("MOUVEMENT DÉPÔTS", style: _headerStyle)),
+                  DataColumn(
+                      label: Text("MOUVEMENT DÉPÔTS", style: _headerStyle)),
                   DataColumn(label: Text("DATE", style: _headerStyle)),
                   DataColumn(label: Text("MOTIF", style: _headerStyle)),
                   DataColumn(label: Text("VOLUME", style: _headerStyle)),
@@ -1487,10 +1595,10 @@ class _StockTransfersState extends State<StockTransfers>
                 rows: _filteredTransferts.map((transfert) {
                   return DataRow(
                     cells: [
-                      // N° Bon
                       DataCell(
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF1F5F9),
                             borderRadius: BorderRadius.circular(6),
@@ -1507,63 +1615,71 @@ class _StockTransfersState extends State<StockTransfers>
                           ),
                         ),
                       ),
-
-                      // Trajet
                       DataCell(
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               transfert.depotSourceNom,
-                              style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF0F172A)),
+                              style: const TextStyle(
+                                  fontFamily: kAppFontFamily,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: Color(0xFF0F172A)),
                             ),
                             const Padding(
                               padding: EdgeInsets.symmetric(horizontal: 6),
-                              child: Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF0067C0)),
+                              child: Icon(Icons.arrow_forward_rounded,
+                                  size: 14, color: Color(0xFF0067C0)),
                             ),
                             Text(
                               transfert.depotDestinationNom,
-                              style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF0F172A)),
+                              style: const TextStyle(
+                                  fontFamily: kAppFontFamily,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: Color(0xFF0F172A)),
                             ),
                           ],
                         ),
                       ),
-
-                      // Date
                       DataCell(
                         Text(
                           transfert.dateTransfert,
-                          style: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF64748B), fontSize: 12.5),
+                          style: const TextStyle(
+                              fontFamily: kAppFontFamily,
+                              color: Color(0xFF64748B),
+                              fontSize: 12.5),
                         ),
                       ),
-
-                      // Motif
                       DataCell(
                         Text(
                           transfert.motif,
-                          style: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF1E293B), fontSize: 13),
+                          style: const TextStyle(
+                              fontFamily: kAppFontFamily,
+                              color: Color(0xFF1E293B),
+                              fontSize: 13),
                         ),
                       ),
-
-                      // Volume
                       DataCell(
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2.5),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF1F5F9),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             '${transfert.lignes.length} article(s)',
-                            style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w600, fontSize: 11.5, color: Color(0xFF475569)),
+                            style: const TextStyle(
+                                fontFamily: kAppFontFamily,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 11.5,
+                                color: Color(0xFF475569)),
                           ),
                         ),
                       ),
-
-                      // Statut
                       DataCell(_buildStatusBadge(transfert.statut)),
-
-                      // Actions
                       DataCell(
                         Row(
                           mainAxisSize: MainAxisSize.min,
@@ -1592,18 +1708,23 @@ class _StockTransfersState extends State<StockTransfers>
   List<Widget> _buildTableActions(Transfert transfert) {
     final actions = <Widget>[];
 
-    if (_isAdmin) {
+    if (_canManageTransfers) {
       if (transfert.statut == 'en_attente') {
         actions.add(
           ElevatedButton(
-            onPressed: _isSubmitting ? null : () => _validerTransfert(transfert),
+            onPressed:
+            _isSubmitting ? null : () => _validerTransfert(transfert),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0067C0),
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              textStyle: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, fontWeight: FontWeight.w700),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6)),
+              textStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700),
             ),
             child: const Text('Valider'),
           ),
@@ -1611,13 +1732,18 @@ class _StockTransfersState extends State<StockTransfers>
         actions.add(const SizedBox(width: 6));
         actions.add(
           OutlinedButton(
-            onPressed: _isSubmitting ? null : () => _annulerTransfert(transfert),
+            onPressed:
+            _isSubmitting ? null : () => _annulerTransfert(transfert),
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFFC42B1C),
               side: const BorderSide(color: Color(0xFFC42B1C)),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              textStyle: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6)),
+              textStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600),
             ),
             child: const Text('Annuler'),
           ),
@@ -1625,14 +1751,19 @@ class _StockTransfersState extends State<StockTransfers>
       } else if (transfert.statut == 'valide') {
         actions.add(
           ElevatedButton(
-            onPressed: _isSubmitting ? null : () => _effectuerTransfert(transfert),
+            onPressed:
+            _isSubmitting ? null : () => _effectuerTransfert(transfert),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF107C41),
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              textStyle: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, fontWeight: FontWeight.w700),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6)),
+              textStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700),
             ),
             child: const Text('Effectuer'),
           ),
@@ -1640,13 +1771,18 @@ class _StockTransfersState extends State<StockTransfers>
         actions.add(const SizedBox(width: 6));
         actions.add(
           OutlinedButton(
-            onPressed: _isSubmitting ? null : () => _annulerTransfert(transfert),
+            onPressed:
+            _isSubmitting ? null : () => _annulerTransfert(transfert),
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFFC42B1C),
               side: const BorderSide(color: Color(0xFFC42B1C)),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              textStyle: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6)),
+              textStyle: const TextStyle(
+                  fontFamily: kAppFontFamily,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600),
             ),
             child: const Text('Annuler'),
           ),
@@ -1658,7 +1794,11 @@ class _StockTransfersState extends State<StockTransfers>
       actions.add(
         const Text(
           'Terminé',
-          style: TextStyle(fontFamily: kAppFontFamily, fontSize: 12, color: Color(0xFF107C41), fontWeight: FontWeight.w600),
+          style: TextStyle(
+              fontFamily: kAppFontFamily,
+              fontSize: 12,
+              color: Color(0xFF107C41),
+              fontWeight: FontWeight.w600),
         ),
       );
     }
@@ -1667,7 +1807,11 @@ class _StockTransfersState extends State<StockTransfers>
       actions.add(
         const Text(
           'Annulé',
-          style: TextStyle(fontFamily: kAppFontFamily, fontSize: 12, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+          style: TextStyle(
+              fontFamily: kAppFontFamily,
+              fontSize: 12,
+              color: Color(0xFF94A3B8),
+              fontWeight: FontWeight.w500),
         ),
       );
     }
@@ -1682,7 +1826,8 @@ class _StockTransfersState extends State<StockTransfers>
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: _filteredTransferts.length,
-      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0x12000000)),
+      separatorBuilder: (_, __) =>
+      const Divider(height: 1, color: Color(0x12000000)),
       itemBuilder: (context, index) {
         final transfert = _filteredTransferts[index];
         return Padding(
@@ -1695,7 +1840,11 @@ class _StockTransfersState extends State<StockTransfers>
                 children: [
                   Text(
                     transfert.numeroBon,
-                    style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF0067C0)),
+                    style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        color: Color(0xFF0067C0)),
                   ),
                   _buildStatusBadge(transfert.statut),
                 ],
@@ -1703,11 +1852,18 @@ class _StockTransfersState extends State<StockTransfers>
               const SizedBox(height: 4),
               Text(
                 '${transfert.depotSourceNom} → ${transfert.depotDestinationNom}',
-                style: const TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 13.5, color: Color(0xFF0F172A)),
+                style: const TextStyle(
+                    fontFamily: kAppFontFamily,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                    color: Color(0xFF0F172A)),
               ),
               Text(
                 '${transfert.dateTransfert} • ${transfert.motif} • ${transfert.lignes.length} article(s)',
-                style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 11.5, color: Color(0xFF64748B)),
+                style: const TextStyle(
+                    fontFamily: kAppFontFamily,
+                    fontSize: 11.5,
+                    color: Color(0xFF64748B)),
               ),
               const SizedBox(height: 8),
               Row(
@@ -1790,7 +1946,8 @@ class _StockTransfersState extends State<StockTransfers>
                 color: Color(0xFFF1F5F9),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.swap_horiz_rounded, size: 32, color: Color(0xFF94A3B8)),
+              child: const Icon(Icons.swap_horiz_rounded,
+                  size: 32, color: Color(0xFF94A3B8)),
             ),
             const SizedBox(height: 14),
             Text(
@@ -1823,11 +1980,15 @@ class _StockTransfersState extends State<StockTransfers>
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF0067C0),
                   side: const BorderSide(color: Color(0xFF0067C0)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
                 ),
                 child: const Text(
                   'Voir tous les transferts',
-                  style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w600, fontSize: 12),
+                  style: TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12),
                 ),
               ),
             ],
@@ -1839,7 +2000,7 @@ class _StockTransfersState extends State<StockTransfers>
 }
 
 // ---------------------------------------------------------------------------
-// PAINTER VECTORIEL : ONDES FLUIDES DES CARTES TRANSFERTS
+// PAINTER VECTORIEL
 // ---------------------------------------------------------------------------
 class TransferMetricWavePainter extends CustomPainter {
   final double waveSeed;
