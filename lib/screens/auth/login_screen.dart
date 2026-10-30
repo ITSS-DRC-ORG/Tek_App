@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:tek_app/models/user_model.dart';
 import 'package:tek_app/screens/inventory/stock_dashboard.dart';
 import 'package:tek_app/theme/app_theme.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/auth_provider.dart';
 import '../admin/admin_dashboard.dart';
 import '../cashier/cashier_home.dart';
@@ -233,7 +234,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           SizedBox(height: 3),
                           Text(
-                            "Gestion intégrée des stocks, ventes et administration.",
+                            "Gestion intégrée des stocks, ventes et administration. [ITSS]",
                             style: TextStyle(
                               fontFamily: kAppFontFamily,
                               fontSize: 12,
@@ -546,6 +547,42 @@ class _LoginScreenState extends State<LoginScreen> {
                 fontSize: 11,
                 fontWeight: FontWeight.w400,
                 color: Color(0xFF94A3B8),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Spacer(),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: GestureDetector(
+              onTap: () async {
+                final uri = Uri.parse('https://www.itssdrc.com');
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
+              child: RichText(
+                textAlign: TextAlign.center,
+                text: const TextSpan(
+                  style: TextStyle(
+                    fontFamily: kAppFontFamily,
+                    fontSize: 10.5,
+                    color: Color(0xFF94A3B8),
+                  ),
+                  children: [
+                    TextSpan(
+                      text: 'Développé par Innova Tech Solution Service - ',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    TextSpan(
+                      text: 'https://www.itssdrc.com',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0067C0),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
