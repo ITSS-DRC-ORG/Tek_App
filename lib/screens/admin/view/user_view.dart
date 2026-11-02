@@ -441,7 +441,7 @@ class _UserViewState extends State<UserView>
                                     _buildTextField(
                                       controller: _usernameCtrl,
                                       label: 'Nom d\'utilisateur',
-                                      hint: 'ex: jdupont',
+                                      hint: 'ex: merite',
                                       icon: Icons.person_outline_rounded,
                                       isRequired: true,
                                     ),
@@ -449,7 +449,7 @@ class _UserViewState extends State<UserView>
                                     _buildTextField(
                                       controller: _emailCtrl,
                                       label: 'Email professionnel',
-                                      hint: 'ex: jdupont@entreprise.com',
+                                      hint: 'ex: merite@entreprise.com',
                                       icon: Icons.email_outlined,
                                       keyboardType: TextInputType.emailAddress,
                                     ),
@@ -472,7 +472,7 @@ class _UserViewState extends State<UserView>
                                           child: _buildTextField(
                                             controller: _prenomCtrl,
                                             label: 'Prénom',
-                                            hint: 'ex: Jean',
+                                            hint: 'ex: Ntwali',
                                             icon: Icons.badge_outlined,
                                           ),
                                         ),
@@ -481,7 +481,7 @@ class _UserViewState extends State<UserView>
                                           child: _buildTextField(
                                             controller: _nomCtrl,
                                             label: 'Nom',
-                                            hint: 'ex: Dupont',
+                                            hint: 'ex: merite',
                                             icon: Icons.badge_outlined,
                                           ),
                                         ),

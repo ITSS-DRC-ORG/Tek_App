@@ -586,114 +586,7 @@ class _CashierNewSaleState extends State<CashierNewSale>
 
   // ---------------------------------------------------------------------------
   // DIALOGUE SÉLECTION CLIENT
-  // ---------------------------------------------------------------------------
-  void _showClientDialog() {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => Dialog(
-        backgroundColor: const Color(0xFFFFFFFF),
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        child: Container(
-          padding: const EdgeInsets.all(18),
-          width: 420,
-          height: 460,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F2FB),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Icon(Icons.person_search_outlined, color: Color(0xFF0067C0), size: 17),
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Text(
-                      'Sélectionner un compte client',
-                      style: TextStyle(
-                        fontFamily: kAppFontFamily,
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    splashRadius: 14,
-                    icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B), size: 18),
-                    onPressed: () => Navigator.pop(dialogContext),
-                  ),
-                ],
-              ),
-              const Divider(height: 16, thickness: 1, color: Color(0x14000000)),
-              Expanded(
-                child: _clients.isEmpty
-                    ? const Center(
-                  child: Text(
-                    'Aucun client enregistré',
-                    style: TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF94A3B8), fontSize: 12.5),
-                  ),
-                )
-                    : ListView.separated(
-                  itemCount: _clients.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0x10000000)),
-                  itemBuilder: (context, index) {
-                    final client = _clients[index];
-                    final name = client['nom'] as String? ?? '';
-                    final phone = client['telephone'] as String? ?? '';
-                    final isSelected = _selectedClientId == client['id'];
-
-                    return ListTile(
-                      dense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                      leading: CircleAvatar(
-                        radius: 13,
-                        backgroundColor: isSelected ? const Color(0xFF0067C0) : const Color(0xFFE8F2FB),
-                        child: Text(
-                          name.isNotEmpty ? name[0].toUpperCase() : 'C',
-                          style: TextStyle(
-                            fontFamily: kAppFontFamily,
-                            color: isSelected ? Colors.white : const Color(0xFF0067C0),
-                            fontWeight: FontWeight.w700,
-                            fontSize: 10.5,
-                          ),
-                        ),
-                      ),
-                      title: Text(
-                        name,
-                        style: TextStyle(
-                          fontFamily: kAppFontFamily,
-                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                          color: const Color(0xFF0F172A),
-                          fontSize: 12.5,
-                        ),
-                      ),
-                      subtitle: phone.isNotEmpty
-                          ? Text(phone, style: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF64748B), fontSize: 11))
-                          : null,
-                      trailing: isSelected
-                          ? const Icon(Icons.check_circle_rounded, color: Color(0xFF0067C0), size: 17)
-                          : null,
-                      onTap: () {
-                        setState(() => _selectedClientId = client['id'] as int);
-                        Navigator.pop(dialogContext);
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  // --------------------------------------------------------------------------
 
   // ---------------------------------------------------------------------------
   // BUILD PRINCIPAL
@@ -1373,6 +1266,262 @@ class _CashierNewSaleState extends State<CashierNewSale>
   }
 
   // ---------------------------------------------------------------------------
+  // DIALOGUE SÉLECTION & CRÉATION RAPIDE DE CLIENT (WINDOWS 11 FLUENT 2)
+  // ---------------------------------------------------------------------------
+  void _showClientDialog() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => DefaultTabController(
+        length: 2,
+        child: Dialog(
+          backgroundColor: const Color(0xFFFFFFFF),
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          child: Container(
+            padding: const EdgeInsets.all(18),
+            width: 480,
+            height: 530,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // --- EN-TÊTE DU DIALOGUE ---
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F2FB),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(Icons.person_search_outlined, color: Color(0xFF0067C0), size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Gestion du compte client',
+                            style: TextStyle(
+                              fontFamily: kAppFontFamily,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F172A),
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          Text(
+                            'Sélectionnez un client existant ou créez-en un nouveau',
+                            style: TextStyle(fontFamily: kAppFontFamily, fontSize: 11, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      splashRadius: 14,
+                      icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B), size: 18),
+                      onPressed: () => Navigator.pop(dialogContext),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // --- ONGLETS SEGMENTÉS (STYLE WINDOWS 11) ---
+                Container(
+                  height: 36,
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0x10000000)),
+                  ),
+                  child: TabBar(
+                    labelColor: const Color(0xFF0067C0),
+                    unselectedLabelColor: const Color(0xFF64748B),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    dividerColor: Colors.transparent,
+                    indicator: BoxDecoration(
+                      borderRadius: BorderRadius.circular(6),
+                      color: Colors.white,
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x08000000), blurRadius: 4, offset: Offset(0, 1)),
+                      ],
+                    ),
+                    labelStyle: const TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontFamily: kAppFontFamily,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 12,
+                    ),
+                    tabs: const [
+                      Tab(text: 'Clients enregistrés'),
+                      Tab(text: '+ Nouveau client'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // --- CONTENU DES ONGLETS ---
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      // ONGLET 1 : RECHERCHE & LISTE DES CLIENTS
+                      _buildClientsListTab(dialogContext),
+
+                      // ONGLET 2 : FORMULAIRE D'AJOUT RAPIDE
+                      _QuickAddClientForm(
+                        onClientCreated: (newClient) async {
+                          await _loadData();
+                          if (newClient['id'] != null) {
+                            setState(() => _selectedClientId = newClient['id'] as int);
+                          }
+                          if (!mounted) return;
+                          Navigator.pop(dialogContext);
+                          _showSnackBar('Client enregistré et sélectionné', const Color(0xFF107C41));
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // ONGLET 1 : LISTE DES CLIENTS AVEC FILTRE DE RECHERCHE INTÉGRÉ
+  // ---------------------------------------------------------------------------
+  Widget _buildClientsListTab(BuildContext dialogContext) {
+    String searchClientQuery = '';
+
+    return StatefulBuilder(
+      builder: (context, setListState) {
+        final filteredClients = _clients.where((client) {
+          final nom = (client['nom'] as String? ?? '').toLowerCase();
+          final phone = (client['telephone'] as String? ?? '').toLowerCase();
+          final query = searchClientQuery.toLowerCase().trim();
+          return nom.contains(query) || phone.contains(query);
+        }).toList();
+
+        return Column(
+          children: [
+            // Barre de recherche interne
+            SizedBox(
+              height: 34,
+              child: TextField(
+                onChanged: (val) => setListState(() => searchClientQuery = val),
+                style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 12),
+                decoration: InputDecoration(
+                  hintText: 'Filtrer par nom ou numéro de téléphone...',
+                  hintStyle: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFFA0AEC0), fontSize: 11.5),
+                  prefixIcon: const Icon(Icons.search_rounded, size: 16, color: Color(0xFF64748B)),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.4)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Liste des résultats
+            Expanded(
+              child: filteredClients.isEmpty
+                  ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.people_outline_rounded, size: 32, color: Color(0xFF94A3B8)),
+                    const SizedBox(height: 6),
+                    Text(
+                      searchClientQuery.isEmpty ? 'Aucun client enregistré' : 'Aucun résultat trouvé',
+                      style: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF64748B), fontSize: 12),
+                    ),
+                  ],
+                ),
+              )
+                  : ListView.separated(
+                itemCount: filteredClients.length,
+                separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0x10000000)),
+                itemBuilder: (context, index) {
+                  final client = filteredClients[index];
+                  final name = client['nom'] as String? ?? '';
+                  final phone = client['telephone'] as String? ?? '';
+                  final isSelected = _selectedClientId == client['id'];
+
+                  return ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    leading: CircleAvatar(
+                      radius: 14,
+                      backgroundColor: isSelected ? const Color(0xFF0067C0) : const Color(0xFFE8F2FB),
+                      child: Text(
+                        name.isNotEmpty ? name[0].toUpperCase() : 'C',
+                        style: TextStyle(
+                          fontFamily: kAppFontFamily,
+                          color: isSelected ? Colors.white : const Color(0xFF0067C0),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      name,
+                      style: TextStyle(
+                        fontFamily: kAppFontFamily,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                        color: const Color(0xFF0F172A),
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    subtitle: phone.isNotEmpty
+                        ? Text(phone, style: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFF64748B), fontSize: 11))
+                        : null,
+                    trailing: isSelected
+                        ? const Icon(Icons.check_circle_rounded, color: Color(0xFF0067C0), size: 18)
+                        : null,
+                    onTap: () {
+                      setState(() => _selectedClientId = client['id'] as int);
+                      Navigator.pop(dialogContext);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  // ---------------------------------------------------------------------------
+  // HELPERS DE DÉCORATION (Si vous ne les avez pas déjà dans ce fichier)
+  // ---------------------------------------------------------------------------
+  InputDecoration _buildDialogInputDecoration({required String hint, required IconData icon}) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFFA0AEC0), fontSize: 12),
+      prefixIcon: Icon(icon, color: const Color(0xFF64748B), size: 16),
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.4)),
+    );
+  }
+  // ---------------------------------------------------------------------------
   // PIED DE TOTAUX COMPACT ET LISIBLE
   // ---------------------------------------------------------------------------
   Widget _buildTotalsSummary() {
@@ -1650,6 +1799,182 @@ class _CashierNewSaleState extends State<CashierNewSale>
 
   String _formatFrenchDate(DateTime d) {
     return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SOUS-WIDGET INDÉPENDANT : FORMULAIRE DE CRÉATION RAPIDE DE CLIENT
+// ---------------------------------------------------------------------------
+class _QuickAddClientForm extends StatefulWidget {
+  final Future<void> Function(Map<String, dynamic> newClient) onClientCreated;
+
+  const _QuickAddClientForm({required this.onClientCreated});
+
+  @override
+  State<_QuickAddClientForm> createState() => _QuickAddClientFormState();
+}
+
+class _QuickAddClientFormState extends State<_QuickAddClientForm> {
+  final _formKey = GlobalKey<FormState>();
+  final _nomCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _nomCtrl.dispose();
+    _phoneCtrl.dispose();
+    _emailCtrl.dispose();
+    super.dispose();
+  }
+
+  InputDecoration _buildInputDeco({required String hint, required IconData icon}) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(fontFamily: kAppFontFamily, color: Color(0xFFA0AEC0), fontSize: 11.5),
+      prefixIcon: Icon(icon, size: 16, color: const Color(0xFF64748B)),
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF0067C0), width: 1.4)),
+    );
+  }
+
+  Widget _buildFieldLabel(String label, {bool isRequired = false}) {
+    return Row(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: kAppFontFamily,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF475569),
+            letterSpacing: 0.4,
+          ),
+        ),
+        if (isRequired)
+          const Text(' *', style: TextStyle(color: Color(0xFFC42B1C), fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Form(
+      key: _formKey,
+      child: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(top: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Nom complet
+                  _buildFieldLabel("NOM COMPLET OU RAISON SOCIALE", isRequired: true),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    height: 36,
+                    child: TextFormField(
+                      controller: _nomCtrl,
+                      style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 12.5),
+                      decoration: _buildInputDeco(hint: 'ex: Entreprise ABC ou Merite', icon: Icons.person_outline_rounded),
+                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Le nom est obligatoire' : null,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Téléphone
+                  _buildFieldLabel("NUMÉRO DE TÉLÉPHONE"),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    height: 36,
+                    child: TextFormField(
+                      controller: _phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 12.5),
+                      decoration: _buildInputDeco(hint: 'ex: +243 81 000 0000', icon: Icons.phone_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Email
+                  _buildFieldLabel("ADRESSE E-MAIL (OPTIONNEL)"),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    height: 36,
+                    child: TextFormField(
+                      controller: _emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      style: const TextStyle(fontFamily: kAppFontFamily, fontSize: 12.5),
+                      decoration: _buildInputDeco(hint: 'client@domaine.com', icon: Icons.email_outlined),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Bouton d'action
+          SizedBox(
+            width: double.infinity,
+            height: 38,
+            child: ElevatedButton.icon(
+              onPressed: _isSaving
+                  ? null
+                  : () async {
+                if (!_formKey.currentState!.validate()) return;
+                setState(() => _isSaving = true);
+
+                try {
+                  final user = Provider.of<AuthProvider>(context, listen: false).user;
+                  if (user == null) throw Exception('Session expirée');
+                  final service = AdminService(user.token);
+
+                  final newClient = await service.createClient({
+                    'nom': _nomCtrl.text.trim(),
+                    'telephone': _phoneCtrl.text.trim(),
+                    'email': _emailCtrl.text.trim(),
+                  });
+
+                  await widget.onClientCreated(newClient);
+                } catch (e) {
+                  setState(() => _isSaving = false);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Erreur : $e', style: const TextStyle(fontFamily: kAppFontFamily)),
+                      backgroundColor: const Color(0xFFC42B1C),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+              icon: _isSaving
+                  ? const SizedBox.shrink()
+                  : const Icon(Icons.person_add_alt_1_rounded, size: 16),
+              label: _isSaving
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text(
+                'Créer et sélectionner ce client',
+                style: TextStyle(fontFamily: kAppFontFamily, fontWeight: FontWeight.w700, fontSize: 12.5),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0067C0),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
